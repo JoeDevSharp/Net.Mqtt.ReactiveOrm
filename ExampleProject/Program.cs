@@ -1,12 +1,13 @@
-﻿using ExampleProject.Models;
+﻿using ExampleProject.Topics;
 
 namespace ExampleProject
 {
     internal class Program
     {
+        private static MqttContext _context;
         public static async Task Main(string[] args)
         {
-            var context = new MqttContext();
+            _context = new MqttContext();
 
             var deviceStatusMessage = new DeviceStatusMessage
             {
@@ -14,17 +15,16 @@ namespace ExampleProject
             };
 
             // Suscribirse a mensajes
-            await context.DeviceStatusMessage.SubscribeAsync(
+            await _context.DeviceStatusMessage.SubscribeAsync(
                 async message =>
                 {
-                    await Task.Delay(2);
                     Console.WriteLine($"Mensaje recibido: {message.Status} del dispositivo {message.DeviceId}");
                 },
                 new { DeviceId = "iPhone_5587" }
             );
 
             // Publish a message
-            await context.DeviceStatusMessage.PublishAsync(deviceStatusMessage
+            await _context.DeviceStatusMessage.PublishAsync(deviceStatusMessage
                 , new { DeviceId = "iPhone_5587" });
 
             Console.WriteLine($"Published message: {deviceStatusMessage.Status} from device {deviceStatusMessage.DeviceId}");
