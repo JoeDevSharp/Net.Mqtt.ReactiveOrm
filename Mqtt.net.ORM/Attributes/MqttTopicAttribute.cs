@@ -40,35 +40,15 @@ namespace Mqtt.net.ORM.Attributes
         /// </summary>
         /// <param name="parameters">Dictionary of placeholder values</param>
         /// <returns>Resolved topic string</returns>
-        public string Resolve(object? parameters)
+        public string Resolve<T>(T topicClass)
         {
-            if (parameters == null)
+            if (topicClass == null)
                 return Template;
 
-            var type = parameters.GetType();
-            var resolved = Template;
-
-            foreach (var paramName in GetTemplateParameters())
-            {
-                var prop = type.GetProperty(paramName);
-                if (prop != null)
-                {
-                    var value = prop.GetValue(parameters)?.ToString() ?? string.Empty;
-                    resolved = resolved.Replace($"{{{paramName}}}", value);
-                }
-            }
-
-            return resolved;
+            var name = topicClass.GetType().Name;
+            
+            return Template.Replace("[Device]", name);
         }
 
-        /// <summary>
-        /// Extracts parameter names from the template (e.g. {deviceId})
-        /// </summary>
-        public IEnumerable<string> GetTemplateParameters()
-        {
-            var matches = Regex.Matches(Template, @"{([^{}]+)}");
-            foreach (Match match in matches)
-                yield return match.Groups[1].Value;
-        }
     }
 }

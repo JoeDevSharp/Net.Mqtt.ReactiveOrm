@@ -6,10 +6,9 @@ using MQTTnet.Protocol;
 namespace ExampleProject.Topics
 {
 
-    [MqttTopic("devices/{DeviceId}/status", MqttQualityOfServiceLevel.ExactlyOnce)]
-    public class DeviceStatusMessage : TopicStatus
+    [MqttTopic("devices/[Device]/status", MqttQualityOfServiceLevel.ExactlyOnce)]
+    public class Sensor_Temp_001 : TopicStatus
     {
-        public string Name { get; set; } = string.Empty;
         public int Temperature { get; set; } = 0;
         public int Humidity { get; set; } = 0;
     }

@@ -1,5 +1,4 @@
 ﻿using Mqtt.net.ORM.Bus;
-using Mqtt.net.ORM.Bus.Interfaces;
 using Mqtt.net.ORM.Models;
 using MQTTnet;
 using System.Reflection;

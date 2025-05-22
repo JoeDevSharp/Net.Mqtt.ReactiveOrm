@@ -5,7 +5,7 @@ namespace ExampleProject
 {
     public class MqttContext : Mqtt.net.ORM.MqttContext
     {
-        public TopicSet<DeviceStatusMessage> DeviceStatusMessage { get; set; } 
+        public TopicSet<Sensor_Temp_001> Sensor_Temp_001 { get; set; } 
 
         public MqttContext() : base("localhost") { }
     }

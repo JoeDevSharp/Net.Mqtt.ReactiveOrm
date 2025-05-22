@@ -9,25 +9,23 @@ namespace ExampleProject
         {
             _context = new MqttContext();
 
-            var deviceStatusMessage = new DeviceStatusMessage
+            var Sensor_Temp_001 = new Sensor_Temp_001
             {
                 Status = "Online",
             };
 
             // Suscribirse a mensajes
-            await _context.DeviceStatusMessage.SubscribeAsync(
+            await _context.Sensor_Temp_001.SubscribeAsync(
                 async message =>
                 {
-                    Console.WriteLine($"Mensaje recibido: {message.Status} del dispositivo {message.DeviceId}");
-                },
-                new { DeviceId = "iPhone_5587" }
+                    Console.WriteLine($"Mensaje recibido: {message.Status} del dispositivo {message.Id}");
+                }
             );
 
             // Publish a message
-            await _context.DeviceStatusMessage.PublishAsync(deviceStatusMessage
-                , new { DeviceId = "iPhone_5587" });
+            await _context.Sensor_Temp_001.PublishAsync(Sensor_Temp_001);
 
-            Console.WriteLine($"Published message: {deviceStatusMessage.Status} from device {deviceStatusMessage.DeviceId}");
+            Console.WriteLine($"Published message: {Sensor_Temp_001.Status} from device {Sensor_Temp_001.Id}");
 
             // Keep the application running to receive messages
             Console.WriteLine("Press any key to exit...");

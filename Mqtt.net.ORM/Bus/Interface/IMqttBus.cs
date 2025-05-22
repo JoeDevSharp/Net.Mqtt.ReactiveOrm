@@ -20,7 +20,7 @@
         /// Optional template values for topics with placeholders,
         /// e.g. new { deviceId = "123" } for "devices/{deviceId}/status".
         /// </param>
-        Task PublishAsync<T>(T message, object? parameters = null);
+        Task PublishAsync<T>(T message);
 
         /// <summary>
         /// Subscribes a handler to a parameterized topic resolved from <typeparamref name="T"/>.
@@ -35,12 +35,12 @@
         /// If true, replaces any existing handler for the same topic.
         /// Defaults to false (throws on duplicate).
         /// </param>
-        Task SubscribeAsync<T>(Func<T, Task> handler, object? parameters = null);
+        Task SubscribeAsync<T>(Func<T, Task> handler);
 
         /// <summary>
         /// Unsubscribes the handler and cancels the subscription for <typeparamref name="T"/>.
         /// </summary>
         /// <typeparam name="T">Message type decorated with [MqttTopic]</typeparam>
-        Task UnsubscribeAsync<T>(object? parameters = null);
+        Task UnsubscribeAsync<T>();
     }
 }

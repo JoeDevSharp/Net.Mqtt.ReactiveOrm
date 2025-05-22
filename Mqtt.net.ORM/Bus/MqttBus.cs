@@ -1,8 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Mqtt.net.ORM.Attributes;
+﻿using Mqtt.net.ORM.Attributes;
+using Mqtt.net.ORM.Bus.Interfaces;
 using MQTTnet;
-using MqttORM.Bus.Interfaces;
-using MqttORM.Serialization;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text;
@@ -47,12 +45,12 @@ namespace Mqtt.net.ORM.Bus
         /// <summary>
         /// Publishes a strongly‑typed message to its resolved topic.
         /// </summary>
-        public async Task PublishAsync<T>(T message, object? parameters = null)
+        public async Task PublishAsync<T>(T message)
         {
             var attr = typeof(T).GetCustomAttribute<MqttTopicAttribute>()
                 ?? throw new InvalidOperationException($"Type '{typeof(T).Name}' lacks [MqttTopic].");
 
-            var topic = attr.Resolve(parameters);
+            var topic = attr.Resolve(message);
             var payload = _serializer.Serialize(message);
 
             var msg = new MqttApplicationMessageBuilder()
@@ -71,17 +69,13 @@ namespace Mqtt.net.ORM.Bus
         /// <param name="handler">Async handler to invoke on message reception.</param>
         /// <param name="parameters">Dictionary of template values, if any.</param>
         /// <param name="overwrite">Whether to overwrite an existing handler.</param>
-        public async Task SubscribeAsync<T>(
-            Func<T, Task> handler,
-            object? parameters = null)
+        public async Task SubscribeAsync<T>(Func<T, Task> handler)
         {
             var attr = typeof(T).GetCustomAttribute<MqttTopicAttribute>()
                 ?? throw new InvalidOperationException($"Type '{typeof(T).Name}' lacks [MqttTopic].");
 
             // Resolve template placeholders
-            var topic = parameters == null
-                ? attr.Template
-                : attr.Resolve(parameters);
+            var topic = attr.Resolve(Activator.CreateInstance<T>());
 
             // Register or replace handler
             _handlers[topic] = raw => DispatchAsync(raw, handler);
@@ -94,12 +88,12 @@ namespace Mqtt.net.ORM.Bus
         /// <summary>
         /// Unsubscribes the handler for a given message type.
         /// </summary>
-        public async Task UnsubscribeAsync<T>(object? parameters = null)
+        public async Task UnsubscribeAsync<T>()
         {
             var attr = typeof(T).GetCustomAttribute<MqttTopicAttribute>()
                 ?? throw new InvalidOperationException($"Type '{typeof(T).Name}' lacks [MqttTopic].");
 
-            var topic = attr.Resolve(parameters);
+            var topic = attr.Resolve(Activator.CreateInstance<T>());
 
             if (_handlers.TryRemove(topic, out _))
             {
@@ -114,26 +108,6 @@ namespace Mqtt.net.ORM.Bus
             }
         }
 
-        /// <summary>
-        /// Automatically discovers and subscribes all IMqttHandler&lt;T&gt; in DI.
-        /// </summary>
-        public async Task AutoSubscribeAllHandlersAsync(IServiceProvider provider)
-        {
-            var handlerInterface = typeof(IMqttHandler<>);
-            foreach (var service in provider.GetServices<object>())
-            {
-                var impl = service.GetType();
-                foreach (var iface in impl.GetInterfaces()
-                     .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == handlerInterface))
-                {
-                    var messageType = iface.GenericTypeArguments[0];
-                    var method = typeof(MqttBus)
-                        .GetMethod(nameof(SubscribeHandler), BindingFlags.Instance | BindingFlags.NonPublic)!
-                        .MakeGenericMethod(messageType);
-                    await (Task)method.Invoke(this, new[] { service })!;
-                }
-            }
-        }
 
         #region Private helpers
 
@@ -169,14 +143,6 @@ namespace Mqtt.net.ORM.Bus
         {
             var obj = _serializer.Deserialize<T>(raw);
             await handler(obj);
-        }
-
-        /// <summary>
-        /// Invoke SubscribeAsync&lt;T&gt; via reflection for auto-subscribe.
-        /// </summary>
-        private async Task SubscribeHandler<T>(IMqttHandler<T> handler)
-        {
-            await SubscribeAsync<T>(handler.HandleAsync);
         }
 
         /// <summary>
