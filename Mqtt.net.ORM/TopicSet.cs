@@ -3,35 +3,34 @@ using Mqtt.net.ORM.Bus.Interfaces;
 
 namespace Mqtt.net.ORM
 {
-    public class TopicSet<T> where T : class
+    public class TopicSet<T>
     {
         private readonly IMqttBus _mqttBus;
-        private readonly string _template;
-        private readonly bool _allowWildcards;
+        private readonly TopicAttribute _attribute;
 
-        public TopicSet(IMqttBus mqttBus)
+        //private readonly string _template;
+        //private readonly bool _allowWildcards;
+
+        public TopicSet(IMqttBus mqttBus, TopicAttribute attribute)
         {
             _mqttBus = mqttBus ?? throw new ArgumentNullException(nameof(mqttBus));
 
-            var topicAttribute = typeof(T).GetCustomAttributes(typeof(MqttTopicAttribute), false)
-                .FirstOrDefault() as MqttTopicAttribute;
+            _attribute = attribute;
 
-            if (topicAttribute == null)
-                throw new InvalidOperationException($"Type {typeof(T).Name} is not decorated with MqttTopicAttribute.");
-
-            _template = topicAttribute.Template;
-            _allowWildcards = topicAttribute.AllowWildcards;
+            //_template = topicAttribute.Template;
+            //_allowWildcards = topicAttribute.AllowWildcards;
         }
+
 
         /// <summary>
         /// Publishes a message of type T to the resolved topic.
         /// </summary>
-        public async Task PublishAsync(object message)
+        public async Task PublishAsync(T message)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            await _mqttBus.PublishAsync<T>(message);
+            await _mqttBus.PublishAsync<T>(message, _attribute);
         }
 
         /// <summary>
@@ -42,7 +41,7 @@ namespace Mqtt.net.ORM
             if (callback == null)
                 throw new ArgumentNullException(nameof(callback));
 
-            await _mqttBus.SubscribeAsync(callback);
+            await _mqttBus.SubscribeAsync(callback, _attribute);
         }
 
         /// <summary>
@@ -50,7 +49,7 @@ namespace Mqtt.net.ORM
         /// </summary>
         public async Task UnsubscribeAsync()
         {
-            await _mqttBus.UnsubscribeAsync<T>();
+            await _mqttBus.UnsubscribeAsync<T>(_attribute);
         }
     }
 }

@@ -2,8 +2,8 @@
 
 namespace ExampleProject.Topics
 {
-    [MqttTopic("devices/[Device]/status")]
-    public class Sensor_hex_0001
+    [Topic("devices/@/status")]
+    public class Sensor_hex_001
     {
     }
 }

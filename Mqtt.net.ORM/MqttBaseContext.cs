@@ -1,4 +1,6 @@
-﻿using Mqtt.net.ORM.Bus;
+﻿using Mqtt.net.ORM.Attributes;
+using Mqtt.net.ORM.Bus;
+using Mqtt.net.ORM.Bus.Interfaces;
 using Mqtt.net.ORM.Models;
 using MQTTnet;
 using System.Reflection;
@@ -37,21 +39,36 @@ namespace Mqtt.net.ORM
 
         private void InitializeTopicSets()
         {
-            var topicSetType = typeof(TopicSet<>);
+            var topicSetGenericType = typeof(TopicSet<>);
 
-            // Busca todas las propiedades públicas de instancia que sean TopicSet<T>
-            var props = this.GetType()
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Where(p => p.PropertyType.IsGenericType && p.PropertyType.GetGenericTypeDefinition() == topicSetType);
+            var properties = GetType()
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Where(p =>
+                    p.PropertyType.IsGenericType &&
+                    p.PropertyType.GetGenericTypeDefinition() == topicSetGenericType &&
+                    p.GetCustomAttribute<TopicAttribute>() != null
+                );
 
-            foreach (var prop in props)
+            foreach (var property in properties)
             {
-                var genericArg = prop.PropertyType.GetGenericArguments()[0];
-                var constructed = typeof(TopicSet<>).MakeGenericType(genericArg);
-                var instance = Activator.CreateInstance(constructed, MqttBus);
-                prop.SetValue(this, instance);
+                var topicAttr = property.GetCustomAttribute<TopicAttribute>();
+                var genericArg = property.PropertyType.GetGenericArguments()[0];
+
+                var constructedTopicSetType = topicSetGenericType.MakeGenericType(genericArg);
+
+                // Busca un constructor que reciba (IMqttBus, TopicAttribute)
+                var constructor = constructedTopicSetType.GetConstructor(new[] { typeof(IMqttBus), typeof(TopicAttribute) });
+                if (constructor == null)
+                {
+                    throw new InvalidOperationException($"TopicSet<{genericArg.Name}> must have a constructor with (IMqttBus, TopicAttribute)");
+                }
+
+                var instance = constructor.Invoke(new object[] { MqttBus, topicAttr });
+
+                property.SetValue(this, instance);
             }
         }
+
 
         /// <summary>
         /// Configura la dirección y el puerto del servidor MQTT.

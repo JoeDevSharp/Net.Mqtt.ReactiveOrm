@@ -45,22 +45,20 @@ namespace Mqtt.net.ORM.Bus
         /// <summary>
         /// Publishes a strongly‑typed message to its resolved topic.
         /// </summary>
-        public async Task PublishAsync<T>(object message)
+        public async Task PublishAsync<T>(object message, TopicAttribute attribute)
         {
-            var attr = typeof(T).GetCustomAttribute<MqttTopicAttribute>()
-                ?? throw new InvalidOperationException($"Type '{typeof(T).Name}' lacks [MqttTopic].");
-
-            var topic = attr.Resolve(Activator.CreateInstance<T>());
+            var topic = attribute.Resolve(Activator.CreateInstance<T>());
             var payload = _serializer.Serialize(message);
 
             var msg = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)
                 .WithPayload(payload)
-                .WithQualityOfServiceLevel(attr.QoS)
+                .WithQualityOfServiceLevel(attribute.QoS)
                 .Build();
 
             await ConnectAsync();
             await _client.PublishAsync(msg);
+            Console.WriteLine($"Published : {typeof(T).Name} to topic {topic}");
         }
 
         /// <summary>
@@ -69,31 +67,25 @@ namespace Mqtt.net.ORM.Bus
         /// <param name="handler">Async handler to invoke on message reception.</param>
         /// <param name="parameters">Dictionary of template values, if any.</param>
         /// <param name="overwrite">Whether to overwrite an existing handler.</param>
-        public async Task SubscribeAsync<T>(Func<T, Task> handler)
+        public async Task SubscribeAsync<T>(Func<T, Task> handler, TopicAttribute attribute)
         {
-            var attr = typeof(T).GetCustomAttribute<MqttTopicAttribute>()
-                ?? throw new InvalidOperationException($"Type '{typeof(T).Name}' lacks [MqttTopic].");
-
             // Resolve template placeholders
-            var topic = attr.Resolve(Activator.CreateInstance<T>());
+            var topic = attribute.Resolve(Activator.CreateInstance<T>());
 
             // Register or replace handler
             _handlers[topic] = raw => DispatchAsync(raw, handler);
 
             // Connect and subscribe
             await ConnectAsync();
-            await _client.SubscribeAsync(topic, attr.QoS);
+            await _client.SubscribeAsync(topic, attribute.QoS);
         }
 
         /// <summary>
         /// Unsubscribes the handler for a given message type.
         /// </summary>
-        public async Task UnsubscribeAsync<T>()
+        public async Task UnsubscribeAsync<T>(TopicAttribute attribute)
         {
-            var attr = typeof(T).GetCustomAttribute<MqttTopicAttribute>()
-                ?? throw new InvalidOperationException($"Type '{typeof(T).Name}' lacks [MqttTopic].");
-
-            var topic = attr.Resolve(Activator.CreateInstance<T>());
+            var topic = attribute.Resolve(Activator.CreateInstance<T>());
 
             if (_handlers.TryRemove(topic, out _))
             {
@@ -110,6 +102,7 @@ namespace Mqtt.net.ORM.Bus
 
 
         #region Private helpers
+
 
         /// <summary>
         /// Central message-dispatch entry point.

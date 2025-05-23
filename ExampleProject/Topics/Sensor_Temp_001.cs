@@ -1,10 +1,5 @@
-﻿using Mqtt.net.ORM.Attributes;
-using MQTTnet.Protocol;
-
-namespace ExampleProject.Topics
+﻿namespace ExampleProject.Topics
 {
-
-    [MqttTopic("devices/[Device]/status", MqttQualityOfServiceLevel.ExactlyOnce)]
     public class Sensor_Temp_001
     {
         public int Temperature { get; set; } = 0;

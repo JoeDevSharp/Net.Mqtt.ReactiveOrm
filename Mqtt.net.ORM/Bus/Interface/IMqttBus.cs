@@ -1,4 +1,6 @@
-﻿namespace Mqtt.net.ORM.Bus.Interfaces
+﻿using Mqtt.net.ORM.Attributes;
+
+namespace Mqtt.net.ORM.Bus.Interfaces
 {
 
     /// <summary>
@@ -20,7 +22,7 @@
         /// Optional template values for topics with placeholders,
         /// e.g. new { deviceId = "123" } for "devices/{deviceId}/status".
         /// </param>
-        Task PublishAsync<T>(object message);
+        Task PublishAsync<T>(object message, TopicAttribute attribute);
 
         /// <summary>
         /// Subscribes a handler to a parameterized topic resolved from <typeparamref name="T"/>.
@@ -35,12 +37,12 @@
         /// If true, replaces any existing handler for the same topic.
         /// Defaults to false (throws on duplicate).
         /// </param>
-        Task SubscribeAsync<T>(Func<T, Task> handler);
+        Task SubscribeAsync<T>(Func<T, Task> handler, TopicAttribute attribute);
 
         /// <summary>
         /// Unsubscribes the handler and cancels the subscription for <typeparamref name="T"/>.
         /// </summary>
         /// <typeparam name="T">Message type decorated with [MqttTopic]</typeparam>
-        Task UnsubscribeAsync<T>();
+        Task UnsubscribeAsync<T>(TopicAttribute attribute);
     }
 }
