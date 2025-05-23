@@ -9,27 +9,31 @@ namespace ExampleProject
         {
             _context = new MqttContext();
 
-            var Sensor_Temp_001 = new Sensor_Temp_001
-            {
-                Status = "Online",
-            };
-
             // Suscribirse a mensajes
-            await _context.Sensor_Temp_001.SubscribeAsync(
-                async message =>
+            await _context.Sensor_hex_001.SubscribeAsync(async message =>
+            {
+                Console.WriteLine($"Mensaje recibido: {message} del dispositivo {message?.GetType().Name ?? "desconocido"}");
+                await Task.CompletedTask;
+            });
+
+            await _context.Sensor_Temp_001.SubscribeAsync(async message =>
                 {
-                    Console.WriteLine($"Mensaje recibido: {message.Status} del dispositivo {message.Id}");
+                    Console.WriteLine($"Mensaje recibido: {message.Temperature} del dispositivo {message.GetType().Name}");
+                    await Task.CompletedTask;
                 }
             );
 
             // Publish a message
-            await _context.Sensor_Temp_001.PublishAsync(Sensor_Temp_001);
+            await _context.Sensor_Temp_001.PublishAsync(new Sensor_Temp_001
+            {
+                Temperature = 25,
+                Humidity = 60
+            });
 
-            Console.WriteLine($"Published message: {Sensor_Temp_001.Status} from device {Sensor_Temp_001.Id}");
+            await _context.Sensor_hex_001.PublishAsync(2.5);
 
-            // Keep the application running to receive messages
-            Console.WriteLine("Press any key to exit...");
-            Console.ReadKey();
+            Console.WriteLine($"Published message");
+            Console.ReadLine();
         }
     }
 }

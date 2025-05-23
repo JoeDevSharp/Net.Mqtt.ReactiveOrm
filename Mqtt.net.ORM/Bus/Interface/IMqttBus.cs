@@ -20,7 +20,7 @@
         /// Optional template values for topics with placeholders,
         /// e.g. new { deviceId = "123" } for "devices/{deviceId}/status".
         /// </param>
-        Task PublishAsync<T>(T message);
+        Task PublishAsync<T>(object message);
 
         /// <summary>
         /// Subscribes a handler to a parameterized topic resolved from <typeparamref name="T"/>.

@@ -5,7 +5,7 @@ using System.Reflection;
 
 namespace Mqtt.net.ORM
 {
-    public class MqttContext
+    public class MqttBaseContext
     {
         /// <summary>
         /// Instancia interna de opciones para almacenar los valores de configuración del servidor MQTT.
@@ -14,7 +14,7 @@ namespace Mqtt.net.ORM
 
         public MqttBus MqttBus;
 
-        public MqttContext(string host, int port = 1883)
+        public MqttBaseContext(string host = "localhost", int port = 1883)
         {
             Options.Server = host;
             Options.Port = port;
@@ -58,8 +58,8 @@ namespace Mqtt.net.ORM
         /// </summary>
         /// <param name="host">Dirección del servidor MQTT.</param>
         /// <param name="port">Puerto del servidor MQTT (por defecto 1883).</param>
-        /// <returns>Instancia de <see cref="MqttContext"/> para encadenar llamadas.</returns>
-        public MqttContext WithServer(string host, int port = 1883)
+        /// <returns>Instancia de <see cref="MqttBaseContext"/> para encadenar llamadas.</returns>
+        public MqttBaseContext WithServer(string host, int port = 1883)
         {
             Options.Server = host;
             Options.Port = port;
@@ -70,8 +70,8 @@ namespace Mqtt.net.ORM
         /// Configura el identificador del cliente MQTT.
         /// </summary>
         /// <param name="clientId">Identificador del cliente.</param>
-        /// <returns>Instancia de <see cref="MqttContext"/> para encadenar llamadas.</returns>
-        public MqttContext WithClientId(string clientId)
+        /// <returns>Instancia de <see cref="MqttBaseContext"/> para encadenar llamadas.</returns>
+        public MqttBaseContext WithClientId(string clientId)
         {
             Options.ClientId = clientId;
             return this;
@@ -82,8 +82,8 @@ namespace Mqtt.net.ORM
         /// </summary>
         /// <param name="username">Nombre de usuario.</param>
         /// <param name="password">Contraseña.</param>
-        /// <returns>Instancia de <see cref="MqttContext"/> para encadenar llamadas.</returns>
-        public MqttContext WithCredentials(string username, string password)
+        /// <returns>Instancia de <see cref="MqttBaseContext"/> para encadenar llamadas.</returns>
+        public MqttBaseContext WithCredentials(string username, string password)
         {
             Options.Username = username;
             Options.Password = password;
@@ -94,8 +94,8 @@ namespace Mqtt.net.ORM
         /// Habilita o deshabilita el uso de TLS para la conexión MQTT.
         /// </summary>
         /// <param name="enabled">Indica si TLS está habilitado (por defecto true).</param>
-        /// <returns>Instancia de <see cref="MqttContext"/> para encadenar llamadas.</returns>
-        public MqttContext UseTls(bool enabled = true)
+        /// <returns>Instancia de <see cref="MqttBaseContext"/> para encadenar llamadas.</returns>
+        public MqttBaseContext UseTls(bool enabled = true)
         {
             Options.UseTls = enabled;
             return this;

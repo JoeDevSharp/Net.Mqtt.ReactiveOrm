@@ -45,12 +45,12 @@ namespace Mqtt.net.ORM.Bus
         /// <summary>
         /// Publishes a strongly‑typed message to its resolved topic.
         /// </summary>
-        public async Task PublishAsync<T>(T message)
+        public async Task PublishAsync<T>(object message)
         {
             var attr = typeof(T).GetCustomAttribute<MqttTopicAttribute>()
                 ?? throw new InvalidOperationException($"Type '{typeof(T).Name}' lacks [MqttTopic].");
 
-            var topic = attr.Resolve(message);
+            var topic = attr.Resolve(Activator.CreateInstance<T>());
             var payload = _serializer.Serialize(message);
 
             var msg = new MqttApplicationMessageBuilder()

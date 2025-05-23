@@ -26,12 +26,12 @@ namespace Mqtt.net.ORM
         /// <summary>
         /// Publishes a message of type T to the resolved topic.
         /// </summary>
-        public async Task PublishAsync(T message)
+        public async Task PublishAsync(object message)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            await _mqttBus.PublishAsync(message);
+            await _mqttBus.PublishAsync<T>(message);
         }
 
         /// <summary>
