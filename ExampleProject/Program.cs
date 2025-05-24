@@ -5,10 +5,9 @@ namespace ExampleProject
 {
     internal class Program
     {
-        private static MqttContext _context;
         public static void Main(string[] args)
         {
-            _context = new MqttContext();
+            var _context = new MqttContext();
 
             _context.Sensor_Temp_001
                  .Observable()
