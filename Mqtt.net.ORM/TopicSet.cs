@@ -1,12 +1,23 @@
 ﻿using Mqtt.net.ORM.Attributes;
 using Mqtt.net.ORM.Bus.Interfaces;
+using System.Threading.Tasks;
 
 namespace Mqtt.net.ORM
 {
     public class TopicSet<T>
     {
+        /// <summary>
+        /// The MQTT topic template (e.g., sensors/{deviceId}/temperature)
+        /// </summary>
+        public string Template => _attribute.Template;
+        /// <summary>
+        /// Whether this topic supports MQTT wildcards (+/#) for subscriptions.
+        /// </summary>
+        public bool AllowWildcards => _attribute.AllowWildcards;
+     
         private readonly IMqttBus _mqttBus;
         private readonly TopicAttribute _attribute;
+
 
         //private readonly string _template;
         //private readonly bool _allowWildcards;
@@ -20,6 +31,12 @@ namespace Mqtt.net.ORM
             //_template = topicAttribute.Template;
             //_allowWildcards = topicAttribute.AllowWildcards;
         }
+
+        public IObservable<T> Observable()
+        {
+            return _mqttBus.GetObservable<T>(_attribute);
+        }
+
 
 
         /// <summary>

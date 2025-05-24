@@ -13,6 +13,8 @@ namespace Mqtt.net.ORM.Bus.Interfaces
         /// </summary>
         Task ConnectAsync();
 
+        IObservable<T> GetObservable<T>(TopicAttribute attribute);
+
         /// <summary>
         /// Publishes a message instance to its resolved topic.
         /// </summary>

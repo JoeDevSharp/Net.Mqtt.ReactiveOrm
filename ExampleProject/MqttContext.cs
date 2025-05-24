@@ -14,5 +14,9 @@ namespace ExampleProject
 
         [Topic("devices/@/status", MqttQualityOfServiceLevel.ExactlyOnce)]
         public TopicSet<Sensor_Temp_001> Sensor_Temp_001 { get; set; }
+
+        public MqttContext() : base("localhost", 1883)
+        {
+        }
     }
 }
