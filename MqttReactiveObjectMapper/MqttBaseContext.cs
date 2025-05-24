@@ -30,10 +30,11 @@ namespace Codevia.MqttReactiveObjectMapper
         /// </summary>
         /// <param name="host">Dirección del servidor MQTT (por defecto "localhost").</param>
         /// <param name="port">Puerto del servidor MQTT (por defecto 1883).</param>
-        public MqttBaseContext(string host = "localhost", int port = 1883, string? username = null, string? password = null)
+        public MqttBaseContext(string host = "localhost", int port = 1883, string? username = null, string? password = null, bool useTls = false)
         {
             Options.Server = host;
             Options.Port = port;
+            Options.UseTls = useTls;
 
             var clientFactory = new MqttClientFactory();
             var mqttClient = clientFactory.CreateMqttClient();
@@ -42,6 +43,13 @@ namespace Codevia.MqttReactiveObjectMapper
                 .WithTcpServer(Options.Server, Options.Port)
                 .WithClientId(Options.ClientId)
                 .WithCredentials(username, password)
+                .WithTlsOptions(new MqttClientTlsOptions
+                {
+                    UseTls = Options.UseTls,
+                    AllowUntrustedCertificates = true, // Cambiar según sea necesario
+                    IgnoreCertificateChainErrors = true, // Cambiar según sea necesario
+                    IgnoreCertificateRevocationErrors = true // Cambiar según sea necesario
+                })
                 .Build();
 
             var serializer = new MqttSerializer();

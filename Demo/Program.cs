@@ -30,7 +30,7 @@ namespace Demo
             // Se envía un objeto con temperatura 18°C y humedad 45%
             context.DHT230222_Modules.Publish(new Entities.DHT230222_Modules
             {
-                Temperature = 18,
+                Temperature = 3,
                 Humidity = 45.0
             });
 

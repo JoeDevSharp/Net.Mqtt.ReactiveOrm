@@ -1,6 +1,7 @@
 ﻿using Codevia.MqttReactiveObjectMapper.Attributes;
 using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
 using MQTTnet;
+using MQTTnet.Protocol;
 using System.Collections.Concurrent;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -107,6 +108,25 @@ namespace Codevia.MqttReactiveObjectMapper.Bus
                 .WithTopic(topic)
                 .WithPayload(payload)
                 .WithQualityOfServiceLevel(attribute.QoS)
+                .WithRetainFlag(attribute.Retain)
+                .Build();
+
+            await ConnectAsync();
+            await _client.PublishAsync(msg);
+
+            Console.WriteLine($"Mensaje publicado: {typeof(T).Name} en el topic {topic}");
+        }
+
+        public async Task PublishAsync<T>(object message, TopicAttribute attribute, MqttQualityOfServiceLevel qos, bool retain)
+        {
+            var topic = attribute.Resolve(Activator.CreateInstance<T>());
+            var payload = _serializer.Serialize(message);
+
+            var msg = new MqttApplicationMessageBuilder()
+                .WithTopic(topic)
+                .WithPayload(payload)
+                .WithQualityOfServiceLevel(qos)
+                .WithRetainFlag(retain)
                 .Build();
 
             await ConnectAsync();

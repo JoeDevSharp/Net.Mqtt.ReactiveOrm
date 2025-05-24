@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Codevia.MqttReactiveObjectMapper" Version="1.0.1" />
+    <ProjectReference Include="..\MqttReactiveObjectMapper\MqttReactiveObjectMapper.csproj" />
   </ItemGroup>
 
 </Project>
