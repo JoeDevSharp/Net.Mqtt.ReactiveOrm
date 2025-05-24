@@ -23,6 +23,10 @@ Inspired by Entity Framework’s DbContext and DbSet&lt;T&gt; model, Mqtt.Net.Or
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="MqttReactiveObjectMapper.csproj.Backup.tmp" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\MqttReactiveObjectMapper.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
