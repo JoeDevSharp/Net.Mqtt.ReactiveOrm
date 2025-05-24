@@ -1,7 +1,7 @@
-﻿using MqttReactiveObjectMapper.Attributes;
-using MqttReactiveObjectMapper.Bus.Interfaces;
+﻿using Codevia.MqttReactiveObjectMapper.Attributes;
+using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
 
-namespace MqttReactiveObjectMapper.Interfaces
+namespace Codevia.MqttReactiveObjectMapper.Interfaces
 {
     /// <summary>
     /// Representa un conjunto de tópicos MQTT fuertemente tipados, con capacidades de observación, publicación y cancelación de suscripción.

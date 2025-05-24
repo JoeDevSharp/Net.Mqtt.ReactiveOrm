@@ -1,4 +1,4 @@
-﻿namespace MqttReactiveObjectMapper.Models
+﻿namespace Codevia.MqttReactiveObjectMapper.Models
 {
     /// <summary>
     /// Representa las opciones de configuración para la conexión con un servidor MQTT.

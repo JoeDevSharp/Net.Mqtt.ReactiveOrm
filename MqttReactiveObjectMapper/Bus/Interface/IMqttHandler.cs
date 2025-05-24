@@ -1,4 +1,4 @@
-﻿namespace MqttReactiveObjectMapper.Bus.Interfaces
+﻿namespace Codevia.MqttReactiveObjectMapper.Bus.Interfaces
 {
     /// <summary>
     /// Define un manejador para mensajes MQTT entrantes del tipo <typeparamref name="T"/>.

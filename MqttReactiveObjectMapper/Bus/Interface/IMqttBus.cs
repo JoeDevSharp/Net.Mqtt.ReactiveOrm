@@ -1,6 +1,6 @@
-﻿using MqttReactiveObjectMapper.Attributes;
+﻿using Codevia.MqttReactiveObjectMapper.Attributes;
 
-namespace MqttReactiveObjectMapper.Bus.Interfaces
+namespace Codevia.MqttReactiveObjectMapper.Bus.Interfaces
 {
     /// <summary>
     /// Define un bus de mensajes MQTT fuertemente tipado.

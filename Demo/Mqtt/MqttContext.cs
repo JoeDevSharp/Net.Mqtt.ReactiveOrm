@@ -1,6 +1,6 @@
 ﻿using Demo.Entities;
-using MqttReactiveObjectMapper;
-using MqttReactiveObjectMapper.Attributes;
+using Codevia.MqttReactiveObjectMapper;
+using Codevia.MqttReactiveObjectMapper.Attributes;
 
 namespace Demo.Mqtt
 {

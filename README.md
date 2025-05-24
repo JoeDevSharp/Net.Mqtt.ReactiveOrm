@@ -1,8 +1,8 @@
-## 🧠 Framework – MqttReactiveObjectMapper
+## 🧠 Framework – Codevia.MqttReactiveObjectMapper
 
-**Mqtt.Net.Orm** is a lightweight Reactive Object Mapper (ROM) for MQTT-based applications in .NET. It abstracts MQTT topics as strongly typed, observable entities, enabling developers to handle real-time data streams using LINQ-style syntax and reactive programming patterns.
+**Codevia.MqttReactiveObjectMapper** is a lightweight Reactive Object Mapper (ROM) for MQTT-based applications in .NET. It abstracts MQTT topics as strongly typed, observable entities, enabling developers to handle real-time data streams using LINQ-style syntax and reactive programming patterns.
 
-Inspired by Entity Framework’s `DbContext` and `DbSet<T>` model, `Mqtt.Net.Orm` brings structure and clarity to messaging-driven systems by treating MQTT topics as first-class, observable data sources. This makes it easier to reason about, subscribe to, filter, and publish MQTT messages without dealing directly with low-level client code.
+Inspired by Entity Framework’s `DbContext` and `DbSet<T>` model, `Codevia.MqttReactiveObjectMapper` brings structure and clarity to messaging-driven systems by treating MQTT topics as first-class, observable data sources. This makes it easier to reason about, subscribe to, filter, and publish MQTT messages without dealing directly with low-level client code.
 
 ---
 
@@ -37,7 +37,7 @@ Inspired by Entity Framework’s `DbContext` and `DbSet<T>` model, `Mqtt.Net.Orm
 
 ### 🤝 Philosophy
 
-Mqtt.Net.Orm promotes a **clean, reactive, and domain-driven** approach to working with MQTT. Instead of treating MQTT as a generic transport layer with string topics and JSON blobs, it treats it as a structured, type-safe message bus that seamlessly integrates with C#'s type system and LINQ capabilities.
+Codevia.MqttReactiveObjectMapper promotes a **clean, reactive, and domain-driven** approach to working with MQTT. Instead of treating MQTT as a generic transport layer with string topics and JSON blobs, it treats it as a structured, type-safe message bus that seamlessly integrates with C#'s type system and LINQ capabilities.
 
 The goal is to minimize boilerplate, enforce consistency, and make reactive MQTT applications more expressive and maintainable.
 
@@ -45,7 +45,7 @@ The goal is to minimize boilerplate, enforce consistency, and make reactive MQTT
 
 Let me know if you'd like this reformatted as a `README.md`, or integrated with badges, install instructions, and GitHub action workflows. I can also generate an architectural diagram or visual overview if needed.
 
-## 📘 Developer Documentation – Mqtt.Net.Orm
+## 📘 Developer Documentation – Codevia.MqttReactiveObjectMapper
 
 ### Table of Contents
 
@@ -63,7 +63,7 @@ Let me know if you'd like this reformatted as a `README.md`, or integrated with 
 
 ### ✅ 1. Introduction
 
-`Mqtt.Net.Orm` is a lightweight framework that simplifies working with **MQTT topics as strongly typed reactive entities** in .NET applications. Inspired by Entity Framework, it enables a structured, observable, and declarative approach to working with real-time MQTT data.
+`Codevia.MqttReactiveObjectMapper` is a lightweight framework that simplifies working with **MQTT topics as strongly typed reactive entities** in .NET applications. Inspired by Entity Framework, it enables a structured, observable, and declarative approach to working with real-time MQTT data.
 
 ---
 
@@ -72,7 +72,7 @@ Let me know if you'd like this reformatted as a `README.md`, or integrated with 
 Install the NuGet package:
 
 ```bash
-dotnet add package Mqtt.Net.Orm
+dotnet add package Codevia.MqttReactiveObjectMapper
 ```
 
 Or reference the project directly if you’re working from source.
@@ -84,7 +84,7 @@ Or reference the project directly if you’re working from source.
 Each entity class must be annotated with the `[Topic]` attribute to define the corresponding MQTT topic.
 
 ```csharp
-using Mqtt.net.ORM.Attributes;
+using Codevia.MqttReactiveObjectMapper.Attributes;
 
 public class DHT230222_Modules
 {

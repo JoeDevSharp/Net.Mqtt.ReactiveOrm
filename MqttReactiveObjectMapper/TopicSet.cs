@@ -1,9 +1,9 @@
-﻿using MqttReactiveObjectMapper.Attributes;
-using MqttReactiveObjectMapper.Bus.Interfaces;
-using MqttReactiveObjectMapper.Interfaces;
+﻿using Codevia.MqttReactiveObjectMapper.Attributes;
+using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
+using Codevia.MqttReactiveObjectMapper.Interfaces;
 using System.Reactive.Linq;
 
-namespace MqttReactiveObjectMapper
+namespace Codevia.MqttReactiveObjectMapper
 {
     public class TopicSet<T> : ITopicSet<T>, IObservable<T>
     {

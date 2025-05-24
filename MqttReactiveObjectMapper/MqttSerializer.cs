@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace MqttReactiveObjectMapper
+namespace Codevia.MqttReactiveObjectMapper
 {
     /// <summary>
     /// Provides serialization and deserialization for MQTT messages.
