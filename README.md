@@ -104,7 +104,7 @@ The context exposes topic sets as typed properties, similar to EF’s `DbSet<T>`
 public class MqttContext : MqttOrmContext
 {
     [Topic("iot/devices/dht/module1")]
-    public ITopicSet<DHT230222_Modules> DHT230222_Modules { get; }
+    public TopicSet<DHT230222_Modules> DHT230222_Modules { get; }
 
     public MqttContext()
     {
