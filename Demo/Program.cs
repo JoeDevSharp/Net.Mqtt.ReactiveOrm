@@ -6,7 +6,7 @@ namespace Demo
         static void Main(string[] args)
         {
             // Crear una nueva instancia del contexto MQTT, que gestiona la conexión y los temas MQTT
-            var context = new Mqtt.MqttContext();
+            var context = new MqttContext();
 
             // Suscribirse al tema DHT230222_Modules y filtrar los mensajes donde la temperatura es mayor a 20.5°C
             // Solo los módulos que cumplen esta condición activarán la acción definida en Subscribe
@@ -28,10 +28,10 @@ namespace Demo
 
             // Publicar un mensaje de ejemplo en el tema DHT230222_Modules
             // Se envía un objeto con temperatura 18°C y humedad 45%
-            context.DHT230222_Modules.Publish(new Entities.DHT230222_Modules
+            context.DHT230222_Modules.Publish(new DHT230222_Modules()
             {
-                Temperature = 3,
-                Humidity = 45.0
+                Temperature = 18.0,
+                Humidity = 45.0,
             });
 
             // Mantener la aplicación en ejecución hasta que el usuario presione una tecla
