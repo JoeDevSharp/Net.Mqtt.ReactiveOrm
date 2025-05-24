@@ -1,7 +1,6 @@
 ﻿using Codevia.MqttReactiveObjectMapper;
 using Codevia.MqttReactiveObjectMapper.Attributes;
 using Codevia.MqttReactiveObjectMapper.Enums;
-using MQTTnet.Protocol;
 
 public class DHT230222_Modules
 {
