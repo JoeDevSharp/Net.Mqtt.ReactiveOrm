@@ -18,11 +18,6 @@ namespace Codevia.MqttReactiveObjectMapper.Attributes
         public string Template { get; }
 
         /// <summary>
-        /// Indica si se permiten comodines MQTT (+/#) en este tópico para suscripciones.
-        /// </summary>
-        public bool AllowWildcards { get; }
-
-        /// <summary>
         /// Nivel de calidad del servicio (QoS) por defecto para este tópico.
         /// </summary>
         public MqttQualityOfServiceLevel QoS { get; }
@@ -43,8 +38,7 @@ namespace Codevia.MqttReactiveObjectMapper.Attributes
         public TopicAttribute(
             string template,
             QoSLevel qos = QoSLevel.AtMostOnce,
-            bool retain = false,
-            bool allowWildcards = false)
+            bool retain = false)
         {
             if (string.IsNullOrWhiteSpace(template))
                 throw new ArgumentException("La plantilla del tópico debe ser una cadena no vacía.", nameof(template));
@@ -52,7 +46,6 @@ namespace Codevia.MqttReactiveObjectMapper.Attributes
             Template = template;
             QoS = (MqttQualityOfServiceLevel)qos;
             Retain = retain;
-            AllowWildcards = allowWildcards;
         }
 
         /// <summary>
