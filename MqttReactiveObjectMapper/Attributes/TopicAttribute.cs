@@ -1,11 +1,12 @@
-﻿using MQTTnet.Protocol;
+﻿using Codevia.MqttReactiveObjectMapper.Enums;
+using MQTTnet.Protocol;
 
 namespace Codevia.MqttReactiveObjectMapper.Attributes
 {
     /// <summary>
     /// Atributo que define un tópico MQTT asociado a una clase o propiedad. 
-    /// Permite especificar la plantilla del tópico, el nivel de calidad del servicio (QoS)
-    /// y si se permiten comodines para suscripciones.
+    /// Permite especificar la plantilla del tópico, el nivel de calidad del servicio (QoS),
+    /// la retención y si se permiten comodines para suscripciones.
     /// </summary>
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Class, Inherited = true, AllowMultiple = false)]
     public class TopicAttribute : Attribute
@@ -22,25 +23,36 @@ namespace Codevia.MqttReactiveObjectMapper.Attributes
         public bool AllowWildcards { get; }
 
         /// <summary>
-        /// Nivel de calidad del servicio (QoS) para este tópico.
+        /// Nivel de calidad del servicio (QoS) por defecto para este tópico.
         /// </summary>
         public MqttQualityOfServiceLevel QoS { get; }
+
+        /// <summary>
+        /// Indica si los mensajes deben marcarse como retenidos por defecto.
+        /// </summary>
+        public bool Retain { get; }
 
         /// <summary>
         /// Crea una nueva instancia del atributo <see cref="TopicAttribute"/>.
         /// </summary>
         /// <param name="template">Plantilla del tópico MQTT. Debe ser una cadena no vacía.</param>
         /// <param name="QoS">Nivel de calidad del servicio (por defecto: AtMostOnce).</param>
+        /// <param name="retain">Indica si los mensajes deben ser retenidos por defecto (por defecto: false).</param>
         /// <param name="allowWildcards">Indica si se permiten comodines MQTT (por defecto: false).</param>
         /// <exception cref="ArgumentException">Se lanza si la plantilla del tópico es nula o vacía.</exception>
-        public TopicAttribute(string template, MqttQualityOfServiceLevel QoS = MqttQualityOfServiceLevel.AtMostOnce, bool allowWildcards = false)
+        public TopicAttribute(
+            string template,
+            QoSLevel qos = QoSLevel.AtMostOnce,
+            bool retain = false,
+            bool allowWildcards = false)
         {
             if (string.IsNullOrWhiteSpace(template))
                 throw new ArgumentException("La plantilla del tópico debe ser una cadena no vacía.", nameof(template));
 
             Template = template;
+            QoS = (MqttQualityOfServiceLevel)qos;
+            Retain = retain;
             AllowWildcards = allowWildcards;
-            this.QoS = QoS;
         }
 
         /// <summary>
