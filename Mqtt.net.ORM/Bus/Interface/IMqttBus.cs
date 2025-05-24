@@ -35,19 +35,6 @@ namespace Mqtt.net.ORM.Bus.Interfaces
         Task PublishAsync<T>(object message, TopicAttribute attribute);
 
         /// <summary>
-        /// Suscribe un manejador (handler) a un topic específico basado en el tipo de mensaje <typeparamref name="T"/>.
-        /// El handler se invoca cada vez que se recibe un mensaje en el topic correspondiente.
-        /// </summary>
-        /// <typeparam name="T">Tipo del mensaje decorado con [Topic].</typeparam>
-        /// <param name="handler">Función asincrónica que procesa el mensaje recibido.</param>
-        /// <param name="attribute">Atributo con el template del topic (puede incluir comodines).</param>
-        /// <param name="overwrite">
-        /// Si es verdadero, reemplaza cualquier manejador existente para el mismo topic.
-        /// Por defecto es falso, lo que provocará una excepción si ya existe una suscripción.
-        /// </param>
-        Task SubscribeAsync<T>(Func<T, Task> handler, TopicAttribute attribute);
-
-        /// <summary>
         /// Cancela la suscripción del manejador para el tipo de mensaje <typeparamref name="T"/>.
         /// </summary>
         /// <typeparam name="T">Tipo del mensaje decorado con [Topic].</typeparam>

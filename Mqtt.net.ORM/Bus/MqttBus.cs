@@ -116,28 +116,6 @@ namespace Mqtt.net.ORM.Bus
         }
 
         /// <inheritdoc />
-        public async Task SubscribeAsync<T>(Func<T, Task> handler, TopicAttribute attribute)
-        {
-            var topic = attribute.Resolve(Activator.CreateInstance<T>());
-
-            _handlers[topic] = async raw =>
-            {
-                var message = _serializer.Deserialize<T>(raw);
-
-                if (_subjects.TryGetValue(typeof(T), out var subjObj))
-                {
-                    var subject = (ISubject<T>)subjObj;
-                    subject.OnNext(message);
-                }
-
-                await handler(message);
-            };
-
-            await ConnectAsync();
-            await _client.SubscribeAsync(topic, attribute.QoS);
-        }
-
-        /// <inheritdoc />
         public async Task UnsubscribeAsync<T>(TopicAttribute attribute)
         {
             var topic = attribute.Resolve(Activator.CreateInstance<T>());

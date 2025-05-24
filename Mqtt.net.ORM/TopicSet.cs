@@ -39,31 +39,20 @@ namespace Mqtt.net.ORM
         /// <summary>
         /// Publishes a message of type T to the resolved topic.
         /// </summary>
-        public async Task PublishAsync(T message)
+        public void PublishAsync(T message)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            await _mqttBus.PublishAsync<T>(message, _attribute);
-        }
-
-        /// <summary>
-        /// Subscribes to a topic for messages of type T and invokes the callback when messages arrive.
-        /// </summary>
-        public async Task SubscribeAsync(Func<T, Task> callback)
-        {
-            if (callback == null)
-                throw new ArgumentNullException(nameof(callback));
-
-            await _mqttBus.SubscribeAsync(callback, _attribute);
+            _mqttBus.PublishAsync<T>(message, _attribute).GetAwaiter().GetResult();
         }
 
         /// <summary>
         /// Unsubscribes from the topic for messages of type T.
         /// </summary>
-        public async Task UnsubscribeAsync()
+        public void Unsubscribe()
         {
-            await _mqttBus.UnsubscribeAsync<T>(_attribute);
+            _mqttBus.UnsubscribeAsync<T>(_attribute).GetAwaiter().GetResult();
         }
     }
 }
