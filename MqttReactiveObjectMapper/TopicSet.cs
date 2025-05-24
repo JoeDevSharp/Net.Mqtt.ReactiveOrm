@@ -28,10 +28,6 @@ namespace Codevia.MqttReactiveObjectMapper
         /// </summary>
         public string Template => _attribute.Template;
 
-        /// <summary>
-        /// Indica si se permiten comodines en la suscripción.
-        /// </summary>
-        public bool AllowWildcards => _attribute.AllowWildcards;
 
         private readonly IMqttBus _mqttBus;
         private readonly TopicAttribute _attribute;

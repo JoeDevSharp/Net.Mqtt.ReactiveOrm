@@ -25,11 +25,6 @@ namespace Codevia.MqttReactiveObjectMapper.Interfaces
         string Template { get; }
 
         /// <summary>
-        /// Indica si se permiten comodines (+/#) en la suscripción.
-        /// </summary>
-        bool AllowWildcards { get; }
-
-        /// <summary>
         /// Devuelve el observable completo asociado al tópico.
         /// </summary>
         IObservable<T> Observable();

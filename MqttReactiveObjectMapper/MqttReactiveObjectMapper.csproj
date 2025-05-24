@@ -17,7 +17,7 @@ Inspired by Entity Framework’s DbContext and DbSet&lt;T&gt; model, Mqtt.Net.Or
     <PackageIcon>MqttReactiveObjectMapper.png</PackageIcon>
     <RootNamespace>Codevia.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <PackageTags>mqtt, mqttnet, reactive, orm, dotnet, csharp, mqtt-client, iot, mqtt-broker, observable, pubsub, mqtt-mapping, system-integration, mqtt-orm, mqtt-framework, typed-topics, serialization, json, mqtt-wrapper, mqtt-abstraction</PackageTags>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Copyright>Codevia</Copyright>
     <PackageOutputPath>bin/nuget</PackageOutputPath>
   </PropertyGroup>
