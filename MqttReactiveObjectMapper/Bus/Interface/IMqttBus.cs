@@ -1,4 +1,5 @@
 ﻿using Codevia.MqttReactiveObjectMapper.Attributes;
+using MQTTnet.Protocol;
 
 namespace Codevia.MqttReactiveObjectMapper.Bus.Interfaces
 {
@@ -33,6 +34,16 @@ namespace Codevia.MqttReactiveObjectMapper.Bus.Interfaces
         /// Atributo que define el template del topic.
         /// </param>
         Task PublishAsync<T>(object message, TopicAttribute attribute);
+
+        /// <summary>
+        /// Publica una instancia de mensaje en su topic MQTT correspondiente con overider QoS and Retain.
+        /// </summary>
+        /// <typeparam name="T">Tipo del mensaje decorado con [Topic].</typeparam>
+        /// <param name="message">Objeto del mensaje a serializar y publicar.</param>
+        /// <param name="attribute">
+        /// Atributo que define el template del topic.
+        /// </param>
+        Task PublishAsync<T>(object message, TopicAttribute attribute, MqttQualityOfServiceLevel qos, bool retain);
 
         /// <summary>
         /// Cancela la suscripción del manejador para el tipo de mensaje <typeparamref name="T"/>.

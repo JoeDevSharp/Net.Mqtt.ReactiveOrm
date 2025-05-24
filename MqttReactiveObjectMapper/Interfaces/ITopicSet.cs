@@ -1,5 +1,6 @@
 ﻿using Codevia.MqttReactiveObjectMapper.Attributes;
 using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
+using Codevia.MqttReactiveObjectMapper.Enums;
 
 namespace Codevia.MqttReactiveObjectMapper.Interfaces
 {
@@ -37,6 +38,11 @@ namespace Codevia.MqttReactiveObjectMapper.Interfaces
         /// Publica un mensaje en el tópico MQTT.
         /// </summary>
         void Publish(T message);
+
+        /// <summary>
+        /// Publica un mensaje en el tópico MQTT, reescribe Qos y Retail.
+        /// </summary>
+        void Publish(T message, QoSLevel qos, bool retain);
 
         /// <summary>
         /// Cancela la suscripción del tipo de mensaje asociado.
