@@ -86,7 +86,6 @@ Each entity class must be annotated with the `[Topic]` attribute to define the c
 ```csharp
 using Mqtt.net.ORM.Attributes;
 
-[Topic("iot/devices/dht/module1")]
 public class DHT230222_Modules
 {
     public double Temperature { get; set; }
@@ -99,11 +98,12 @@ public class DHT230222_Modules
 
 ### 🏗️ 4. Creating the MQTT Context
 
-The context exposes topic sets as typed properties, similar to EF’s `DbSet<T>`.
+The context exposes topic sets as typed properties, similar to EF’s `DbSet<T>`. Each topics must be annotated with the `[Topic]` attribute to define the corresponding MQTT topic.
 
 ```csharp
 public class MqttContext : MqttOrmContext
 {
+    [Topic("iot/devices/dht/module1")]
     public ITopicSet<DHT230222_Modules> DHT230222_Modules { get; }
 
     public MqttContext()
