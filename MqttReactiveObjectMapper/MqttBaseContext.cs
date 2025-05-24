@@ -1,11 +1,11 @@
-﻿using Mqtt.net.ORM.Attributes;
-using Mqtt.net.ORM.Bus;
-using Mqtt.net.ORM.Bus.Interfaces;
-using Mqtt.net.ORM.Models;
+﻿using MqttReactiveObjectMapper.Attributes;
+using MqttReactiveObjectMapper.Bus;
+using MqttReactiveObjectMapper.Bus.Interfaces;
+using MqttReactiveObjectMapper.Models;
 using MQTTnet;
 using System.Reflection;
 
-namespace Mqtt.net.ORM
+namespace MqttReactiveObjectMapper
 {
     /// <summary>
     /// Clase base para el contexto MQTT que configura y administra la conexión MQTT, 
@@ -30,7 +30,7 @@ namespace Mqtt.net.ORM
         /// </summary>
         /// <param name="host">Dirección del servidor MQTT (por defecto "localhost").</param>
         /// <param name="port">Puerto del servidor MQTT (por defecto 1883).</param>
-        public MqttBaseContext(string host = "localhost", int port = 1883)
+        public MqttBaseContext(string host = "localhost", int port = 1883, string? username = null, string? password = null)
         {
             Options.Server = host;
             Options.Port = port;
@@ -41,7 +41,7 @@ namespace Mqtt.net.ORM
             var options = new MqttClientOptionsBuilder()
                 .WithTcpServer(Options.Server, Options.Port)
                 .WithClientId(Options.ClientId)
-                .WithCredentials(Options.Username, Options.Password)
+                .WithCredentials(username, password)
                 .Build();
 
             var serializer = new MqttSerializer();

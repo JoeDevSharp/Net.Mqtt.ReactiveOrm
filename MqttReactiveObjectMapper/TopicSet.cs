@@ -1,8 +1,9 @@
-﻿using Mqtt.net.ORM.Attributes;
-using Mqtt.net.ORM.Bus.Interfaces;
-using Mqtt.net.ORM.Interfaces;
+﻿using MqttReactiveObjectMapper.Attributes;
+using MqttReactiveObjectMapper.Bus.Interfaces;
+using MqttReactiveObjectMapper.Interfaces;
+using System.Reactive.Linq;
 
-namespace Mqtt.net.ORM
+namespace MqttReactiveObjectMapper
 {
     public class TopicSet<T> : ITopicSet<T>, IObservable<T>
     {
@@ -25,7 +26,18 @@ namespace Mqtt.net.ORM
             _attribute = attribute ?? throw new ArgumentNullException(nameof(attribute));
         }
 
-        public IObservable<T> Observable() => _observable;
+        /// <summary>
+        /// Filtra los elementos de una secuencia observable según un predicado.
+        /// </summary>
+        /// <param name="predicate">Función para probar cada elemento de la secuencia.</param>
+        /// <returns>Una secuencia observable que contiene los elementos que cumplen la condición.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="predicate"/> es null.</exception>
+        public IObservable<T> Where(Func<T, bool> predicate)
+        {
+            if (predicate == null)
+                throw new ArgumentNullException(nameof(predicate));
+            return _observable.Where(predicate);
+        }
 
         /// <summary>
         /// Soporta suscripción directa cuando TopicSet<T> se usa como IObservable<T>
@@ -46,6 +58,11 @@ namespace Mqtt.net.ORM
         public void Unsubscribe()
         {
             _mqttBus.UnsubscribeAsync<T>(_attribute).GetAwaiter().GetResult();
+        }
+
+        public IObservable<T> Observable()
+        {
+            return _observable;
         }
     }
 }

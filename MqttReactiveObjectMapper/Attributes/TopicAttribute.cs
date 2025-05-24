@@ -1,6 +1,6 @@
 ﻿using MQTTnet.Protocol;
 
-namespace Mqtt.net.ORM.Attributes
+namespace MqttReactiveObjectMapper.Attributes
 {
     /// <summary>
     /// Atributo que define un tópico MQTT asociado a una clase o propiedad. 

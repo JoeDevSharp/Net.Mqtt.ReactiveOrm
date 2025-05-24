@@ -1,7 +1,7 @@
-﻿using Mqtt.net.ORM.Attributes;
-using Mqtt.net.ORM.Bus.Interfaces;
+﻿using MqttReactiveObjectMapper.Attributes;
+using MqttReactiveObjectMapper.Bus.Interfaces;
 
-namespace Mqtt.net.ORM.Interfaces
+namespace MqttReactiveObjectMapper.Interfaces
 {
     /// <summary>
     /// Representa un conjunto de tópicos MQTT fuertemente tipados, con capacidades de observación, publicación y cancelación de suscripción.

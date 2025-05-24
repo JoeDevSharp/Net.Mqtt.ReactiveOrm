@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace Mqtt.net.ORM
+namespace MqttReactiveObjectMapper
 {
     /// <summary>
     /// Provides serialization and deserialization for MQTT messages.

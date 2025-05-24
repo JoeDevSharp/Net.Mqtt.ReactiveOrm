@@ -1,6 +1,6 @@
-﻿using Mqtt.net.ORM.Attributes;
+﻿using MqttReactiveObjectMapper.Attributes;
 
-namespace Mqtt.net.ORM.Bus.Interfaces
+namespace MqttReactiveObjectMapper.Bus.Interfaces
 {
     /// <summary>
     /// Define un bus de mensajes MQTT fuertemente tipado.

@@ -1,4 +1,4 @@
-﻿namespace Mqtt.net.ORM.Models
+﻿namespace MqttReactiveObjectMapper.Models
 {
     /// <summary>
     /// Representa las opciones de configuración para la conexión con un servidor MQTT.

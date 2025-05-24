@@ -1,4 +1,4 @@
-﻿namespace Mqtt.net.ORM.Bus.Interfaces
+﻿namespace MqttReactiveObjectMapper.Bus.Interfaces
 {
     /// <summary>
     /// Define un manejador para mensajes MQTT entrantes del tipo <typeparamref name="T"/>.

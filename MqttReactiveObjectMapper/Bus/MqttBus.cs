@@ -1,5 +1,5 @@
-﻿using Mqtt.net.ORM.Attributes;
-using Mqtt.net.ORM.Bus.Interfaces;
+﻿using MqttReactiveObjectMapper.Attributes;
+using MqttReactiveObjectMapper.Bus.Interfaces;
 using MQTTnet;
 using System.Collections.Concurrent;
 using System.Reactive.Linq;
@@ -7,7 +7,7 @@ using System.Reactive.Subjects;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Mqtt.net.ORM.Bus
+namespace MqttReactiveObjectMapper.Bus
 {
     /// <summary>
     /// Implementación por defecto de <see cref="IMqttBus"/> utilizando MQTTnet.
