@@ -1,6 +1,5 @@
 ﻿using Mqtt.net.ORM.Attributes;
 using Mqtt.net.ORM.Bus.Interfaces;
-using System.Threading.Tasks;
 
 namespace Mqtt.net.ORM
 {
@@ -36,8 +35,6 @@ namespace Mqtt.net.ORM
         {
             return _mqttBus.GetObservable<T>(_attribute);
         }
-
-
 
         /// <summary>
         /// Publishes a message of type T to the resolved topic.

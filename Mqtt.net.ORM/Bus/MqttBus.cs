@@ -10,8 +10,8 @@ using System.Text.RegularExpressions;
 namespace Mqtt.net.ORM.Bus
 {
     /// <summary>
-    /// Default implementation of IMqttBus using MQTTnet.
-    /// Handles reactive subscription and publishing of strongly-typed messages over MQTT.
+    /// Implementación por defecto de <see cref="IMqttBus"/> utilizando MQTTnet.
+    /// Gestiona suscripciones reactivas y la publicación de mensajes fuertemente tipados sobre MQTT.
     /// </summary>
     public class MqttBus : IMqttBus
     {
@@ -25,21 +25,22 @@ namespace Mqtt.net.ORM.Bus
         private readonly ConcurrentDictionary<Type, Task> _subscriptionTasks = new();
 
         /// <summary>
-        /// Constructs an instance of MqttBus.
+        /// Crea una nueva instancia de <see cref="MqttBus"/>.
         /// </summary>
+        /// <param name="client">Instancia del cliente MQTT.</param>
+        /// <param name="options">Opciones de conexión para el cliente MQTT.</param>
+        /// <param name="serializer">Serializador para transformar mensajes.</param>
         public MqttBus(IMqttClient client, MqttClientOptions options, MqttSerializer serializer)
         {
             _client = client;
             _options = options;
             _serializer = serializer;
 
-            // Hook into the message received event to dispatch messages to registered handlers
+            // Registro del evento para manejar mensajes recibidos
             _client.ApplicationMessageReceivedAsync += OnApplicationMessageReceivedAsync;
         }
 
-        /// <summary>
-        /// Connects to the MQTT broker if not already connected.
-        /// </summary>
+        /// <inheritdoc />
         public async Task ConnectAsync()
         {
             if (!_client.IsConnected)
@@ -48,20 +49,16 @@ namespace Mqtt.net.ORM.Bus
             }
         }
 
-        /// <summary>
-        /// Returns an observable stream for a given message type and topic attribute.
-        /// Automatically subscribes to the topic if needed.
-        /// </summary>
+        /// <inheritdoc />
         public IObservable<T> GetObservable<T>(TopicAttribute attribute)
         {
-            // Check if the observable already exists
             if (!_subjects.TryGetValue(typeof(T), out var subjectObj))
             {
                 var subject = new Subject<T>();
                 _subjects[typeof(T)] = subject;
                 _topicAttributes[typeof(T)] = attribute;
 
-                // Ensure subscription is active before returning the observable
+                // Garantiza que se haya realizado la suscripción
                 EnsureSubscribedAsync<T>().GetAwaiter().GetResult();
 
                 return subject.AsObservable();
@@ -71,7 +68,7 @@ namespace Mqtt.net.ORM.Bus
         }
 
         /// <summary>
-        /// Ensures that a given message type is subscribed to only once.
+        /// Garantiza que el tipo de mensaje <typeparamref name="T"/> esté suscrito solo una vez.
         /// </summary>
         private Task EnsureSubscribedAsync<T>()
         {
@@ -79,13 +76,11 @@ namespace Mqtt.net.ORM.Bus
 
             return _subscriptionTasks.GetOrAdd(type, async _ =>
             {
-                // Validate topic attribute registration
                 if (!_topicAttributes.TryGetValue(type, out var attribute))
-                    throw new InvalidOperationException($"Tipo {type.Name} no registrado. Usa Register<T>(TopicAttribute)");
+                    throw new InvalidOperationException($"El tipo {type.Name} no está registrado. Usa Register<T>(TopicAttribute).");
 
                 var topic = attribute.Resolve(Activator.CreateInstance(type));
 
-                // Register message handler
                 _handlers[topic] = async raw =>
                 {
                     var message = _serializer.Deserialize<T>(raw);
@@ -93,69 +88,56 @@ namespace Mqtt.net.ORM.Bus
                     {
                         ((ISubject<T>)subj).OnNext(message);
                     }
+
                     await Task.CompletedTask;
                 };
 
-                // Connect to broker and subscribe to the topic
                 await ConnectAsync();
                 await _client.SubscribeAsync(topic, attribute.QoS);
             });
         }
 
-        /// <summary>
-        /// Publishes a strongly‑typed message to its resolved topic.
-        /// </summary>
+        /// <inheritdoc />
         public async Task PublishAsync<T>(object message, TopicAttribute attribute)
         {
-            // Resolve topic from attribute
             var topic = attribute.Resolve(Activator.CreateInstance<T>());
             var payload = _serializer.Serialize(message);
 
-            // Build MQTT message
             var msg = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)
                 .WithPayload(payload)
                 .WithQualityOfServiceLevel(attribute.QoS)
                 .Build();
 
-            // Ensure connection and publish
             await ConnectAsync();
             await _client.PublishAsync(msg);
-            Console.WriteLine($"Published : {typeof(T).Name} to topic {topic}");
+
+            Console.WriteLine($"Mensaje publicado: {typeof(T).Name} en el topic {topic}");
         }
 
-        /// <summary>
-        /// Subscribes a handler for a message type, and pushes messages into observable stream if it exists.
-        /// </summary>
+        /// <inheritdoc />
         public async Task SubscribeAsync<T>(Func<T, Task> handler, TopicAttribute attribute)
         {
             var topic = attribute.Resolve(Activator.CreateInstance<T>());
 
-            // Register the handler
             _handlers[topic] = async raw =>
             {
-                // Deserialize message
                 var message = _serializer.Deserialize<T>(raw);
 
-                // Push to observable if present
                 if (_subjects.TryGetValue(typeof(T), out var subjObj))
                 {
                     var subject = (ISubject<T>)subjObj;
                     subject.OnNext(message);
                 }
 
-                // Invoke original handler
                 await handler(message);
             };
 
-            // Connect and subscribe to topic
             await ConnectAsync();
             await _client.SubscribeAsync(topic, attribute.QoS);
         }
 
-        /// <summary>
-        /// Unsubscribes the handler for a given message type.
-        /// </summary>
+        /// <inheritdoc />
         public async Task UnsubscribeAsync<T>(TopicAttribute attribute)
         {
             var topic = attribute.Resolve(Activator.CreateInstance<T>());
@@ -169,28 +151,29 @@ namespace Mqtt.net.ORM.Bus
             }
             else
             {
-                throw new InvalidOperationException($"No handler for '{topic}' to unsubscribe.");
+                throw new InvalidOperationException($"No hay handler registrado para el topic '{topic}' que se pueda cancelar.");
             }
         }
 
-        #region Private helpers
+        #region Métodos privados
 
         /// <summary>
-        /// Central message-dispatch entry point. Triggers handler based on topic.
+        /// Método central para el despacho de mensajes MQTT entrantes.
+        /// Se invoca automáticamente cuando se recibe un mensaje desde el broker.
         /// </summary>
         private async Task OnApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs e)
         {
             var topic = e.ApplicationMessage.Topic;
             var payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
 
-            // Try exact match first
+            // Coincidencia exacta del topic
             if (_handlers.TryGetValue(topic, out var handler))
             {
                 await handler(payload);
                 return;
             }
 
-            // Fallback to wildcard pattern matching
+            // Coincidencia con patrón wildcard
             foreach (var kv in _handlers)
             {
                 if (MatchTopic(kv.Key, topic))
@@ -201,7 +184,7 @@ namespace Mqtt.net.ORM.Bus
         }
 
         /// <summary>
-        /// Deserializes payload and invokes the handler.
+        /// Ejecuta la deserialización del mensaje y llama al manejador.
         /// </summary>
         private async Task DispatchAsync<T>(string raw, Func<T, Task> handler)
         {
@@ -210,7 +193,7 @@ namespace Mqtt.net.ORM.Bus
         }
 
         /// <summary>
-        /// Simple MQTT wildcard matcher (‘+’ and ‘#’).
+        /// Realiza el emparejamiento de topics MQTT con comodines (‘+’, ‘#’).
         /// </summary>
         private static bool MatchTopic(string pattern, string topic)
         {

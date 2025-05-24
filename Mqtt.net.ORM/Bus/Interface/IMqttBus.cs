@@ -2,49 +2,56 @@
 
 namespace Mqtt.net.ORM.Bus.Interfaces
 {
-
     /// <summary>
-    /// Defines a strongly‑typed MQTT message bus.
+    /// Define un bus de mensajes MQTT fuertemente tipado.
+    /// Permite la publicación, suscripción y observación de mensajes 
+    /// basados en tipos de datos decorados con atributos [Topic].
     /// </summary>
     public interface IMqttBus
     {
         /// <summary>
-        /// Ensures the underlying MQTT client is connected.
+        /// Asegura que el cliente MQTT subyacente esté conectado.
+        /// Si ya está conectado, no realiza ninguna acción.
         /// </summary>
         Task ConnectAsync();
 
+        /// <summary>
+        /// Obtiene un observable para un tipo de mensaje específico.
+        /// Este flujo permite la suscripción reactiva a mensajes entrantes.
+        /// </summary>
+        /// <typeparam name="T">Tipo del mensaje esperado.</typeparam>
+        /// <param name="attribute">Atributo que define el topic al que se debe suscribir.</param>
+        /// <returns>Una secuencia observable de mensajes del tipo <typeparamref name="T"/>.</returns>
         IObservable<T> GetObservable<T>(TopicAttribute attribute);
 
         /// <summary>
-        /// Publishes a message instance to its resolved topic.
+        /// Publica una instancia de mensaje en su topic MQTT correspondiente.
         /// </summary>
-        /// <typeparam name="T">Message type decorated with [MqttTopic]</typeparam>
-        /// <param name="message">The message object to serialize and publish.</param>
-        /// <param name="parameters">
-        /// Optional template values for topics with placeholders,
-        /// e.g. new { deviceId = "123" } for "devices/{deviceId}/status".
+        /// <typeparam name="T">Tipo del mensaje decorado con [Topic].</typeparam>
+        /// <param name="message">Objeto del mensaje a serializar y publicar.</param>
+        /// <param name="attribute">
+        /// Atributo que define el template del topic.
         /// </param>
         Task PublishAsync<T>(object message, TopicAttribute attribute);
 
         /// <summary>
-        /// Subscribes a handler to a parameterized topic resolved from <typeparamref name="T"/>.
+        /// Suscribe un manejador (handler) a un topic específico basado en el tipo de mensaje <typeparamref name="T"/>.
+        /// El handler se invoca cada vez que se recibe un mensaje en el topic correspondiente.
         /// </summary>
-        /// <typeparam name="T">Message type decorated with [MqttTopic]</typeparam>
-        /// <param name="handler">Async handler invoked on incoming messages.</param>
-        /// <param name="parameters">
-        /// Anonymous object whose property names match the template placeholders,
-        /// e.g. new { deviceId = "+" } to subscribe with wildcard.
-        /// </param>
+        /// <typeparam name="T">Tipo del mensaje decorado con [Topic].</typeparam>
+        /// <param name="handler">Función asincrónica que procesa el mensaje recibido.</param>
+        /// <param name="attribute">Atributo con el template del topic (puede incluir comodines).</param>
         /// <param name="overwrite">
-        /// If true, replaces any existing handler for the same topic.
-        /// Defaults to false (throws on duplicate).
+        /// Si es verdadero, reemplaza cualquier manejador existente para el mismo topic.
+        /// Por defecto es falso, lo que provocará una excepción si ya existe una suscripción.
         /// </param>
         Task SubscribeAsync<T>(Func<T, Task> handler, TopicAttribute attribute);
 
         /// <summary>
-        /// Unsubscribes the handler and cancels the subscription for <typeparamref name="T"/>.
+        /// Cancela la suscripción del manejador para el tipo de mensaje <typeparamref name="T"/>.
         /// </summary>
-        /// <typeparam name="T">Message type decorated with [MqttTopic]</typeparam>
+        /// <typeparam name="T">Tipo del mensaje decorado con [Topic].</typeparam>
+        /// <param name="attribute">Atributo que contiene el template del topic.</param>
         Task UnsubscribeAsync<T>(TopicAttribute attribute);
     }
 }

@@ -7,6 +7,10 @@ using System.Reflection;
 
 namespace Mqtt.net.ORM
 {
+    /// <summary>
+    /// Clase base para el contexto MQTT que configura y administra la conexión MQTT, 
+    /// el bus de mensajes y la inicialización automática de TopicSets definidos en las propiedades públicas.
+    /// </summary>
     public class MqttBaseContext
     {
         /// <summary>
@@ -14,8 +18,18 @@ namespace Mqtt.net.ORM
         /// </summary>
         private MqttServerOptions Options { get; } = new();
 
+        /// <summary>
+        /// Bus de mensajes MQTT utilizado para enviar y recibir datos entre tópicos.
+        /// </summary>
         public MqttBus MqttBus;
 
+        /// <summary>
+        /// Constructor principal del contexto MQTT.
+        /// Inicializa la conexión MQTT con el host y puerto especificados, crea el cliente, 
+        /// configura las opciones y prepara los TopicSets definidos en la clase derivada.
+        /// </summary>
+        /// <param name="host">Dirección del servidor MQTT (por defecto "localhost").</param>
+        /// <param name="port">Puerto del servidor MQTT (por defecto 1883).</param>
         public MqttBaseContext(string host = "localhost", int port = 1883)
         {
             Options.Server = host;
@@ -37,6 +51,10 @@ namespace Mqtt.net.ORM
             InitializeTopicSets();
         }
 
+        /// <summary>
+        /// Inicializa automáticamente las propiedades públicas que heredan de TopicSet<T> 
+        /// y tienen el atributo TopicAttribute, inyectando el bus MQTT y los metadatos del tópico.
+        /// </summary>
         private void InitializeTopicSets()
         {
             var topicSetGenericType = typeof(TopicSet<>);
@@ -68,7 +86,6 @@ namespace Mqtt.net.ORM
                 property.SetValue(this, instance);
             }
         }
-
 
         /// <summary>
         /// Configura la dirección y el puerto del servidor MQTT.

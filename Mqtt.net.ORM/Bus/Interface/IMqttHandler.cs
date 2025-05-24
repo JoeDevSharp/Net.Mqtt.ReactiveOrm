@@ -1,15 +1,15 @@
 ﻿namespace Mqtt.net.ORM.Bus.Interfaces
 {
     /// <summary>
-    /// Defines a handler for incoming MQTT messages of type T.
+    /// Define un manejador para mensajes MQTT entrantes del tipo <typeparamref name="T"/>.
     /// </summary>
-    /// <typeparam name="T">The message type this handler is responsible for.</typeparam>
+    /// <typeparam name="T">Tipo del mensaje que este manejador procesará.</typeparam>
     public interface IMqttHandler<T>
     {
         /// <summary>
-        /// Handles a received MQTT message.
+        /// Procesa un mensaje MQTT recibido.
         /// </summary>
-        /// <param name="message">The message object deserialized from the MQTT payload.</param>
+        /// <param name="message">Objeto del mensaje deserializado desde el payload MQTT.</param>
         Task HandleAsync(T message);
     }
 }
