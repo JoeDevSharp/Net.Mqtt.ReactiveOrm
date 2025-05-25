@@ -3,7 +3,6 @@ using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
 using Codevia.MqttReactiveObjectMapper.Enums;
 using Codevia.MqttReactiveObjectMapper.Interfaces;
 using MQTTnet.Protocol;
-using System.Reactive.Linq;
 
 namespace Codevia.MqttReactiveObjectMapper
 {
