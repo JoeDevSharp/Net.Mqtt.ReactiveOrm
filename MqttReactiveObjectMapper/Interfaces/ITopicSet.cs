@@ -25,11 +25,6 @@ namespace Codevia.MqttReactiveObjectMapper.Interfaces
         string Template { get; }
 
         /// <summary>
-        /// Devuelve el observable completo asociado al tópico.
-        /// </summary>
-        IObservable<T> Observable();
-
-        /// <summary>
         /// Publica un mensaje en el tópico MQTT.
         /// </summary>
         void Publish(T message);

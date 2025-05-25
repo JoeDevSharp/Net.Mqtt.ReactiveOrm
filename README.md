@@ -103,8 +103,13 @@ The context exposes topic sets as typed properties, similar to EF’s `DbSet<T>`
 ```csharp
 public class MqttContext : MqttOrmContext
 {
-    [Topic("iot/devices/dht/module1")]
+    // Topic set for the DHT230222 module status updates
+    [Topic("iot/devices/dht/modules/DHT230222_Modules/status")]
     public TopicSet<DHT230222_Modules> DHT230222_Modules { get; }
+
+    // Example of another topic set using the '@' wildcard to be replaced by a parameter name
+    [Topic("iot/devices/dht/sensors/@/status")]
+    public TopicSet<DHT230222_Modules> EX4008_Sensor { get; }
 
     public MqttContext()
     {

@@ -11,7 +11,7 @@ namespace Codevia.MqttReactiveObjectMapper
     /// Representa un conjunto reactivo de tópicos MQTT fuertemente tipados.
     /// Permite publicar y suscribirse a mensajes de tipo <typeparamref name="T"/> sobre un tópico específico.
     /// </summary>
-    public class TopicSet<T> : ITopicSet<T>, IObservable<T>
+    public partial class TopicSet<T> : ITopicSet<T>, IObservable<T>
     {
         /// <summary>
         /// Instancia del bus MQTT utilizado por este conjunto de tópicos.
@@ -43,29 +43,6 @@ namespace Codevia.MqttReactiveObjectMapper
         {
             _mqttBus = mqttBus ?? throw new ArgumentNullException(nameof(mqttBus));
             _attribute = attribute ?? throw new ArgumentNullException(nameof(attribute));
-        }
-
-        /// <summary>
-        /// Filtra los elementos de una secuencia observable según un predicado.
-        /// </summary>
-        /// <param name="predicate">Función que determina si un elemento debe incluirse.</param>
-        /// <returns>Una secuencia observable con los elementos que cumplen la condición.</returns>
-        /// <exception cref="ArgumentNullException">Si <paramref name="predicate"/> es null.</exception>
-        public IObservable<T> Where(Func<T, bool> predicate)
-        {
-            if (predicate == null)
-                throw new ArgumentNullException(nameof(predicate));
-            return _observable.Where(predicate);
-        }
-
-        /// <summary>
-        /// Permite suscribirse a los mensajes publicados en el tópico.
-        /// </summary>
-        /// <param name="observer">Observador que recibirá los mensajes.</param>
-        /// <returns>Un <see cref="IDisposable"/> que permite cancelar la suscripción.</returns>
-        public IDisposable Subscribe(IObserver<T> observer)
-        {
-            return _observable.Subscribe(observer);
         }
 
         /// <summary>
@@ -103,15 +80,6 @@ namespace Codevia.MqttReactiveObjectMapper
         public void Unsubscribe()
         {
             _mqttBus.UnsubscribeAsync<T>(_attribute).GetAwaiter().GetResult();
-        }
-
-        /// <summary>
-        /// Obtiene la secuencia observable de mensajes del tópico.
-        /// </summary>
-        /// <returns>Una instancia de <see cref="IObservable{T}"/>.</returns>
-        public IObservable<T> Observable()
-        {
-            return _observable;
         }
     }
 }

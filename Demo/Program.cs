@@ -1,4 +1,6 @@
 ﻿
+using System.Reactive.Linq;
+
 namespace Demo
 {
     internal class Program
@@ -15,22 +17,16 @@ namespace Demo
                 .Subscribe(module =>
                 {
                     // Imprimir una alerta en consola cuando la temperatura supera el umbral
-                    Console.WriteLine($"Alert Temperature: {module.Temperature}, Humidity: {module.Humidity}, Timestamp: {module.Timestamp}");
-                });
-
-            // Suscribirse a todos los mensajes del tema DHT230222_Modules, sin filtrar por temperatura
-            // Cada vez que se reciba un mensaje, se imprimen los valores recibidos en consola
-            context.DHT230222_Modules
-                .Subscribe(module =>
-                {
-                    Console.WriteLine($"Received: Temperature: {module.Temperature}, Humidity: {module.Humidity}, Timestamp: {module.Timestamp}");
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"Alert: Temperature: {module.Temperature}, Humidity: {module.Humidity}, Timestamp: {module.Timestamp}");
+                    Console.ResetColor();
                 });
 
             // Publicar un mensaje de ejemplo en el tema DHT230222_Modules
             // Se envía un objeto con temperatura 18°C y humedad 45%
-            context.DHT230222_Modules.Publish(new DHT230222_Modules()
+            context.DHT230222_Modules.Publish(new()
             {
-                Temperature = 18.0,
+                Temperature = 30,
                 Humidity = 45.0,
             });
 
