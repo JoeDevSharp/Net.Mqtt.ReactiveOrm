@@ -4,7 +4,6 @@ namespace Codevia.MqttReactiveObjectMapper
 {
     public partial class TopicSet<T>
     {
-
         /// <summary>
         /// Filtra los elementos de una secuencia observable según un predicado.
         /// </summary>
@@ -13,9 +12,9 @@ namespace Codevia.MqttReactiveObjectMapper
         /// <exception cref="ArgumentNullException">Si <paramref name="predicate"/> es null.</exception>
         public IObservable<T> Where(Func<T, bool> predicate)
         {
-            if (predicate == null)
-                throw new ArgumentNullException(nameof(predicate));
-            return _observable.Where(predicate);
+            return predicate == null
+                ? throw new ArgumentNullException(nameof(predicate))
+                : _observable.Where(predicate);
         }
 
         /// <summary>
