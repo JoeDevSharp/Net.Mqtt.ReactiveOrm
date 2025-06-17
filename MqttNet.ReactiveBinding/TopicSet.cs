@@ -1,10 +1,10 @@
-﻿using Codevia.MqttReactiveObjectMapper.Attributes;
-using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
-using Codevia.MqttReactiveObjectMapper.Enums;
-using Codevia.MqttReactiveObjectMapper.Interfaces;
+﻿using JoeDevSharp.MqttNet.ReactiveBinding.Attributes;
+using JoeDevSharp.MqttNet.ReactiveBinding.Bus.Interfaces;
+using JoeDevSharp.MqttNet.ReactiveBinding.Enums;
+using JoeDevSharp.MqttNet.ReactiveBinding.Interfaces;
 using MQTTnet.Protocol;
 
-namespace Codevia.MqttReactiveObjectMapper
+namespace JoeDevSharp.MqttNet.ReactiveBinding
 {
     /// <summary>
     /// Representa un conjunto reactivo de tópicos MQTT fuertemente tipados.

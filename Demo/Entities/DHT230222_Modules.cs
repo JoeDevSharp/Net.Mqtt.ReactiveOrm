@@ -1,4 +1,4 @@
-﻿using Codevia.MqttReactiveObjectMapper.Attributes;
+﻿using JoeDevSharp.MqttNet.ReactiveBinding.Attributes;
 
 namespace Demo.Entities
 {

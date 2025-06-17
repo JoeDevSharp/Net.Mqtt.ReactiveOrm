@@ -1,6 +1,6 @@
-﻿using Codevia.MqttReactiveObjectMapper;
-using Codevia.MqttReactiveObjectMapper.Attributes;
-using Codevia.MqttReactiveObjectMapper.Enums;
+﻿using JoeDevSharp.MqttNet.ReactiveBinding;
+using JoeDevSharp.MqttNet.ReactiveBinding.Attributes;
+using JoeDevSharp.MqttNet.ReactiveBinding.Enums;
 
 public class DHT230222_Modules
 {

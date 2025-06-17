@@ -1,11 +1,11 @@
-﻿using Codevia.MqttReactiveObjectMapper.Attributes;
-using Codevia.MqttReactiveObjectMapper.Bus;
-using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
-using Codevia.MqttReactiveObjectMapper.Models;
+﻿using JoeDevSharp.MqttNet.ReactiveBinding.Attributes;
+using JoeDevSharp.MqttNet.ReactiveBinding.Bus;
+using JoeDevSharp.MqttNet.ReactiveBinding.Bus.Interfaces;
+using JoeDevSharp.MqttNet.ReactiveBinding.Models;
 using MQTTnet;
 using System.Reflection;
 
-namespace Codevia.MqttReactiveObjectMapper
+namespace JoeDevSharp.MqttNet.ReactiveBinding
 {
     /// <summary>
     /// Clase base para el contexto MQTT que configura y administra la conexión MQTT, 

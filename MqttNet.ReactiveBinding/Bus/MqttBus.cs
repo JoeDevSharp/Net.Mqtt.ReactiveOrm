@@ -1,5 +1,5 @@
-﻿using Codevia.MqttReactiveObjectMapper.Attributes;
-using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
+﻿using JoeDevSharp.MqttNet.ReactiveBinding.Attributes;
+using JoeDevSharp.MqttNet.ReactiveBinding.Bus.Interfaces;
 using MQTTnet;
 using MQTTnet.Protocol;
 using System.Collections.Concurrent;
@@ -8,7 +8,7 @@ using System.Reactive.Subjects;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Codevia.MqttReactiveObjectMapper.Bus
+namespace JoeDevSharp.MqttNet.ReactiveBinding.Bus
 {
     /// <summary>
     /// Implementación por defecto de <see cref="IMqttBus"/> utilizando MQTTnet.

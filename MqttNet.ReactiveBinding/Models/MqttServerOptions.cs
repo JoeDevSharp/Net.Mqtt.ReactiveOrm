@@ -1,4 +1,4 @@
-﻿namespace Codevia.MqttReactiveObjectMapper.Models
+﻿namespace JoeDevSharp.MqttNet.ReactiveBinding.Models
 {
     /// <summary>
     /// Representa las opciones de configuración para la conexión con un servidor MQTT.

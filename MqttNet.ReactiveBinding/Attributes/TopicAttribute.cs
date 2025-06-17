@@ -1,7 +1,7 @@
-﻿using Codevia.MqttReactiveObjectMapper.Enums;
+﻿using JoeDevSharp.MqttNet.ReactiveBinding.Enums;
 using MQTTnet.Protocol;
 
-namespace Codevia.MqttReactiveObjectMapper.Attributes
+namespace JoeDevSharp.MqttNet.ReactiveBinding.Attributes
 {
     /// <summary>
     /// Atributo que define un tópico MQTT asociado a una clase o propiedad. 

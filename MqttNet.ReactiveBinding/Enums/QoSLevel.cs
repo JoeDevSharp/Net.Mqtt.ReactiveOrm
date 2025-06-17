@@ -1,4 +1,4 @@
-﻿namespace Codevia.MqttReactiveObjectMapper.Enums
+﻿namespace JoeDevSharp.MqttNet.ReactiveBinding.Enums
 {
     public enum QoSLevel
     {

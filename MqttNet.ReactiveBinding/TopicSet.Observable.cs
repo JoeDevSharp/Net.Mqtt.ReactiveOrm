@@ -1,6 +1,6 @@
 ﻿using System.Reactive.Linq;
 
-namespace Codevia.MqttReactiveObjectMapper
+namespace JoeDevSharp.MqttNet.ReactiveBinding
 {
     public partial class TopicSet<T>
     {

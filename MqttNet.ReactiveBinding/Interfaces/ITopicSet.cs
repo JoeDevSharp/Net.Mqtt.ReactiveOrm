@@ -1,8 +1,8 @@
-﻿using Codevia.MqttReactiveObjectMapper.Attributes;
-using Codevia.MqttReactiveObjectMapper.Bus.Interfaces;
-using Codevia.MqttReactiveObjectMapper.Enums;
+﻿using JoeDevSharp.MqttNet.ReactiveBinding.Attributes;
+using JoeDevSharp.MqttNet.ReactiveBinding.Bus.Interfaces;
+using JoeDevSharp.MqttNet.ReactiveBinding.Enums;
 
-namespace Codevia.MqttReactiveObjectMapper.Interfaces
+namespace JoeDevSharp.MqttNet.ReactiveBinding.Interfaces
 {
     /// <summary>
     /// Representa un conjunto de tópicos MQTT fuertemente tipados, con capacidades de observación, publicación y cancelación de suscripción.
