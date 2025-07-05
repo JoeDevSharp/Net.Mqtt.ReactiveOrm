@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageId>Codevia.$(AssemblyName)</PackageId>
+    <Title>Mqtt reactive object mapper</Title>
+    <Authors>Codevia, JoeDevSharp</Authors>
+    <Description>Mqtt.Net.Orm is a lightweight Reactive Object Mapper (ROM) for MQTT-based applications in .NET. It abstracts MQTT topics as strongly typed, observable entities, enabling developers to handle real-time data streams using LINQ-style syntax and reactive programming patterns.
+
+Inspired by Entity Framework’s DbContext and DbSet&lt;T&gt; model, Mqtt.Net.Orm brings structure and clarity to messaging-driven systems by treating MQTT topics as first-class, observable data sources. This makes it easier to reason about, subscribe to, filter, and publish MQTT messages without dealing directly with low-level client code.</Description>
+    <PackageProjectUrl>https://github.com/JoeDevSharp/MqttReactiveObjectMapper</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/JoeDevSharp/MqttReactiveObjectMapper</RepositoryUrl>
+    <PackageIcon>MqttReactiveObjectMapper.png</PackageIcon>
+    <RootNamespace>Codevia.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\MqttReactiveObjectMapper.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MQTTnet" Version="5.0.1.1416" />
+    <PackageReference Include="System.Reactive" Version="6.0.1" />
+  </ItemGroup>
+
+</Project>
