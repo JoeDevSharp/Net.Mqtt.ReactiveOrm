@@ -1,87 +1,73 @@
 ## 🧠 Framework – Net.Mqtt.ReactiveOrm
 
-**Net.Mqtt.ReactiveOrm** is a lightweight Reactive Object Mapper (ROM) for MQTT-based applications in .NET. It abstracts MQTT topics as strongly typed, observable entities, enabling developers to handle real-time data streams using LINQ-style syntax and reactive programming patterns.
+**Net.Mqtt.ReactiveOrm** is a lightweight **Reactive Object-Relational Mapper (Reactive ORM)** for MQTT-based .NET applications. It transforms raw MQTT topics into **strongly typed, observable entities**, enabling developers to manipulate real-time data streams with familiar patterns such as LINQ, context objects, and declarative subscriptions.
 
-Inspired by Entity Framework’s `DbContext` and `DbSet<T>` model, `Net.Mqtt.ReactiveOrm` brings structure and clarity to messaging-driven systems by treating MQTT topics as first-class, observable data sources. This makes it easier to reason about, subscribe to, filter, and publish MQTT messages without dealing directly with low-level client code.
+Inspired by the architecture of **Entity Framework** (`DbContext`, `DbSet<T>`), this library introduces a structured, composable, and reactive layer over MQTT – turning your messaging layer into a type-safe, reactive data bus.
 
 ---
 
 ### 🔍 Key Features
 
-- **Entity Mapping via Attributes**: Define MQTT topics using `[Topic]` attributes on classes, making the topic-to-entity relationship explicit.
-- **Reactive Subscriptions**: Use `IObservable<T>` and `Where(...).Subscribe(...)` for reactive, filtered event handling.
-- **Declarative Publishing**: Publish entities directly using the `.Publish(entity)` method, hiding low-level MQTT details.
-- **Plug-and-Play Context**: Create a custom `MqttContext` to manage all MQTT entities just like a database context.
-- **LINQ-style filtering**: Chain `.Where()` and `.Select()` on your MQTT streams.
-- **Transparent MQTT integration**: Built on top of a pluggable `IMqttBus`, it can be adapted to different MQTT libraries and broker implementations.
+* **Entity Mapping via Attributes**: Bind MQTT topics directly to C# classes using `[Topic]` attributes.
+* **Reactive Subscriptions**: React to messages using `IObservable<T>`, `.Where(...)`, and `.Subscribe(...)`.
+* **Declarative Publishing**: Publish messages via `.Publish(entity)` instead of low-level topic handling.
+* **Context-based API**: Create an `MqttOrmContext` that acts like an EF `DbContext` for MQTT.
+* **LINQ-style Filtering**: Use `.Where()` and `.Select()` to declaratively transform and consume streams.
+* **Pluggable MQTT Integration**: Works over any implementation of `IMqttBus` (Mosquitto, HiveMQ, EMQX, etc.).
 
 ---
 
 ### 🔧 Use Case Scenarios
 
-- **IoT Gateways**: Map sensor data (e.g., temperature, humidity) to typed C# classes and react to threshold violations in real time.
-- **Industry 4.0 Applications**: Monitor and control factory machinery using MQTT messages structured as typed objects.
-- **Edge Analytics**: Apply inline analytics (e.g., filtering, transformation) on the edge without manual MQTT client plumbing.
-- **Home Automation Systems**: React to MQTT events (e.g., motion detection, switch toggles) declaratively in .NET apps.
+* **IoT Gateways**: Represent sensors and device data as live C# objects.
+* **Industrial Automation**: Monitor and control systems via strongly typed events.
+* **Edge Processing**: Perform reactive computations without glue code.
+* **Home Automation**: Handle device state changes cleanly and reactively.
 
 ---
 
 ### 🧱 Architecture Overview
 
-- `TopicSet<T>`: A typed gateway to subscribe, publish, and filter MQTT messages mapped to the topic defined on type `T`.
-- `MqttOrmContext`: The central configuration point that registers all MQTT entities and creates topic sets.
-- `IMqttBus`: The abstraction over the MQTT client, which handles publishing, subscribing, and stream conversion.
-- `TopicAttribute`: Metadata annotation that binds a C# class to a specific MQTT topic.
+| Component        | Description                                                                 |
+| ---------------- | --------------------------------------------------------------------------- |
+| `TopicSet<T>`    | Equivalent to `DbSet<T>` – manages publish/subscribe logic for a given type |
+| `MqttOrmContext` | Registers all topic-mapped entities and exposes their `TopicSet<T>`s        |
+| `IMqttBus`       | Abstraction layer over the MQTT client                                      |
+| `TopicAttribute` | Declares the topic-to-entity mapping using attributes                       |
 
 ---
 
 ### 🤝 Philosophy
 
-Net.Mqtt.ReactiveOrm promotes a **clean, reactive, and domain-driven** approach to working with MQTT. Instead of treating MQTT as a generic transport layer with string topics and JSON blobs, it treats it as a structured, type-safe message bus that seamlessly integrates with C#'s type system and LINQ capabilities.
+Rather than treating MQTT as a loose transport protocol with JSON blobs and topic strings, **Net.Mqtt.ReactiveOrm** embraces **type safety**, **reactivity**, and **declarative design**.
 
-The goal is to minimize boilerplate, enforce consistency, and make reactive MQTT applications more expressive and maintainable.
+It enables you to **model your message flows as first-class domain entities**, subscribe with expressive LINQ queries, and **remove boilerplate MQTT plumbing** entirely.
 
----
-
-Let me know if you'd like this reformatted as a `README.md`, or integrated with badges, install instructions, and GitHub action workflows. I can also generate an architectural diagram or visual overview if needed.
-
-## 📘 Developer Documentation – Net.Mqtt.ReactiveOrm
-
-### Table of Contents
-
-1. ✅ Introduction
-2. 🚀 Installation & Setup
-3. 🧩 Defining MQTT Entities
-4. 🏗️ Creating the MQTT Context
-5. 👂 Subscribing to Messages (Reactive)
-6. 📤 Publishing Messages
-7. 🧪 Full Console Example
-8. 🛠️ Best Practices
-9. ❓FAQ
+If Entity Framework brought structure to databases, **Net.Mqtt.ReactiveOrm does the same for MQTT**.
 
 ---
 
-### ✅ 1. Introduction
-
-`Net.Mqtt.ReactiveOrm` is a lightweight framework that simplifies working with **MQTT topics as strongly typed reactive entities** in .NET applications. Inspired by Entity Framework, it enables a structured, observable, and declarative approach to working with real-time MQTT data.
+### 📘 Developer Documentation – Net.Mqtt.ReactiveOrm
 
 ---
 
-### 🚀 2. Installation & Setup
+#### ✅ 1. Introduction
 
-Install the NuGet package:
+`Net.Mqtt.ReactiveOrm` offers a clean, modern alternative to traditional MQTT client libraries by treating messages as **live, observable entities**. It allows your application to **react, publish, and reason** about real-time events with minimal boilerplate.
+
+---
+
+#### 🚀 2. Installation & Setup
 
 ```bash
 dotnet add package Net.Mqtt.ReactiveOrm
 ```
 
-Or reference the project directly if you’re working from source.
+Or reference the source project directly for development or contribution.
 
 ---
 
-### 🧩 3. Defining MQTT Entities
-
-Each entity class must be annotated with the `[Topic]` attribute to define the corresponding MQTT topic.
+#### 🧩 3. Defining MQTT Entities
 
 ```csharp
 using Net.Mqtt.ReactiveOrm.Attributes;
@@ -96,64 +82,53 @@ public class DHT230222_Modules
 
 ---
 
-### 🏗️ 4. Creating the MQTT Context
-
-The context exposes topic sets as typed properties, similar to EF’s `DbSet<T>`. Each topics must be annotated with the `[Topic]` attribute to define the corresponding MQTT topic.
+#### 🏗️ 4. Creating the MQTT Context
 
 ```csharp
 public class MqttContext : MqttOrmContext
 {
-    // Topic set for the DHT230222 module status updates
     [Topic("iot/devices/dht/modules/DHT230222_Modules/status")]
     public TopicSet<DHT230222_Modules> DHT230222_Modules { get; }
 
-    // Example of another topic set using the '@' wildcard to be replaced by a parameter name
     [Topic("iot/devices/dht/sensors/@/status")]
     public TopicSet<DHT230222_Modules> EX4008_Sensor { get; }
 
     public MqttContext()
     {
         DHT230222_Modules = Set<DHT230222_Modules>();
+        EX4008_Sensor = Set<DHT230222_Modules>("EX4008"); // Named parameter replacement
     }
 }
 ```
 
 ---
 
-### 👂 5. Subscribing to Messages
-
-Subscribe to incoming messages using LINQ-like filters:
+#### 👂 5. Subscribing to Messages
 
 ```csharp
 _context.DHT230222_Modules
-    .Where(m => m.Temperature > 20)
-    .Subscribe(m =>
+    .Where(x => x.Temperature > 25)
+    .Subscribe(x =>
     {
-        Console.WriteLine($"High temperature: {m.Temperature}");
+        Console.WriteLine($"Warning: High temp = {x.Temperature}");
     });
 ```
 
-Subscriptions are reactive and automatically connected to the MQTT bus.
-
 ---
 
-### 📤 6. Publishing Messages
-
-Send messages to the corresponding topic using the `Publish` method:
+#### 📤 6. Publishing Messages
 
 ```csharp
-_context.DHT230222_Modules.Publish(new DHT230222_Modules
+await _context.DHT230222_Modules.Publish(new DHT230222_Modules
 {
-    Temperature = 22.5,
-    Humidity = 50.0
+    Temperature = 21.4,
+    Humidity = 44.5
 });
 ```
 
-Publishing is handled asynchronously behind the scenes, but `Publish()` blocks until the operation is completed.
-
 ---
 
-### 🧪 7. Full Console Example
+#### 🧪 7. Full Console Example
 
 ```csharp
 static void Main(string[] args)
@@ -162,7 +137,7 @@ static void Main(string[] args)
 
     context.DHT230222_Modules.Subscribe(m =>
     {
-        Console.WriteLine($"Received: Temp = {m.Temperature} °C, Humidity = {m.Humidity} %");
+        Console.WriteLine($"Temp = {m.Temperature}, Humidity = {m.Humidity}");
     });
 
     context.DHT230222_Modules.Publish(new DHT230222_Modules
@@ -171,27 +146,28 @@ static void Main(string[] args)
         Humidity = 45.0
     });
 
-    Console.ReadLine(); // Keep the application alivez
+    Console.ReadLine();
 }
 ```
 
 ---
 
-### 🛠️ 8. Best Practices
+#### 🛠️ 8. Best Practices
 
-- Wait for connection and subscription to complete before publishing.
-- Use `.Where()` to filter messages and reduce unnecessary processing.
-- Avoid long-running operations inside `.Subscribe()`; use async delegates or background workers.
+* Always wait for connection establishment before publishing.
+* Filter early using `.Where()` to reduce unnecessary processing.
+* Avoid blocking inside `.Subscribe()`; use async patterns if needed.
+* Use wildcard substitution (`@`) to support dynamic topic segments.
 
 ---
 
-### ❓ 9. FAQ
+#### ❓ 9. FAQ
 
-**Q: Can I use MQTT wildcards (+, #)?**
-Yes, set `AllowWildcards = true` in the `[Topic]` attribute.
+> **Q: Can I use MQTT wildcards like `+` and `#`?**
+> Yes, enable `AllowWildcards = true` in the `[Topic]` attribute.
 
-**Q: What does `Set<T>()` do in the context?**
-It returns a `TopicSet<T>` that manages publishing and subscribing to the associated MQTT topic.
+> **Q: What is `Set<T>()`?**
+> Equivalent to `DbContext.Set<T>()`, it returns a `TopicSet<T>` mapped to a topic.
 
-**Q: Is this compatible with any MQTT broker?**
-Yes. The library works with any broker that supports standard MQTT 3.1.1/5.0 (e.g., Mosquitto, HiveMQ, EMQX).
+> **Q: Is it compatible with any MQTT broker?**
+> Yes. As long as the broker supports MQTT 3.1.1 or 5.0.
