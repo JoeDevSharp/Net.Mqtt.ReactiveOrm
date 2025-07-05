@@ -1,6 +1,4 @@
-﻿using JoeDevSharp.MqttNet.ReactiveBinding.Attributes;
-
-namespace Demo.Entities
+﻿namespace Demo.Entities
 {
     public class DHT230222_Modules
     {

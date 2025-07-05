@@ -1,6 +1,6 @@
-﻿using JoeDevSharp.MqttNet.ReactiveBinding;
-using JoeDevSharp.MqttNet.ReactiveBinding.Attributes;
-using JoeDevSharp.MqttNet.ReactiveBinding.Enums;
+﻿using Net.Mqtt.ReactiveOrm;
+using Net.Mqtt.ReactiveOrm.Attributes;
+using Net.Mqtt.ReactiveOrm.Enums;
 
 public class DHT230222_Modules
 {
