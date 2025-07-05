@@ -5,21 +5,21 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <PackageId>JoeDevSharp.$(AssemblyName)</PackageId>
-    <Title>JoeDevSharp.$(AssemblyName)</Title>
+    <PackageId>$(AssemblyName)</PackageId>
+    <Title>$(AssemblyName)</Title>
     <Authors>JoeDevSharp</Authors>
     <Description>Net.Mqtt.ReactiveOrm is a lightweight Reactive Object Mapper (ROM) for MQTT-based applications in .NET. It abstracts MQTT topics as strongly typed, observable entities, enabling developers to handle real-time data streams using LINQ-style syntax and reactive programming patterns.</Description>
-    <PackageProjectUrl>https://github.com/JoeDevSharp/Codevia.MqttReactiveObjectMapper</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/JoeDevSharp</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/JoeDevSharp/Codevia.MqttReactiveObjectMapper</RepositoryUrl>
-    <PackageIcon>Net.Mqtt.ReactiveOrm.logo.png</PackageIcon>
-    <RootNamespace>Codevia.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+    <RepositoryUrl>https://github.com/JoeDevSharp/Net.Mqtt.ReactiveOrm</RepositoryUrl>
+    <PackageIcon>MQTT.Extention.icon.png</PackageIcon>
+    <RootNamespace>$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <PackageTags>mqtt, mqttnet, reactive, orm, dotnet, csharp, mqtt-client, iot, mqtt-broker, observable, pubsub, mqtt-mapping, system-integration, mqtt-orm, mqtt-framework, typed-topics, serialization, json, mqtt-wrapper, mqtt-abstraction</PackageTags>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <Copyright></Copyright>
     <PackageOutputPath>bin/nuget</PackageOutputPath>
-    <Product>JoeDevSharp.$(AssemblyName)</Product>
-    <AssemblyName>JoeDevSharp.$(MSBuildProjectName)</AssemblyName>
+    <Product>$(AssemblyName)</Product>
+    <AssemblyName>$(MSBuildProjectName.Replace(" ", "_"))</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\Net.Mqtt.ReactiveOrm.logo.png">
+    <None Include="..\..\..\..\iCloudDrive\JoeDev\Logos\MQTT.Extention.icon.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>

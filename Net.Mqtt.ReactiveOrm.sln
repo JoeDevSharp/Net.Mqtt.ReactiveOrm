@@ -5,7 +5,7 @@ VisualStudioVersion = 17.14.36109.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Demo", "Demo\Demo.csproj", "{19C9C5C8-3451-4E2A-8D45-91B22789A654}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Net.Mqtt.ReactiveOrm", "MqttNet.ReactiveBinding\Net.Mqtt.ReactiveOrm.csproj", "{06D4A582-2625-9C66-0EDE-42FE9D7C2C32}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Net.Mqtt.ReactiveOrm", "Net.Mqtt.ReactiveOrm\Net.Mqtt.ReactiveOrm.csproj", "{8A004146-1D42-0602-A343-187B00946B0B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +17,10 @@ Global
 		{19C9C5C8-3451-4E2A-8D45-91B22789A654}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{19C9C5C8-3451-4E2A-8D45-91B22789A654}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{19C9C5C8-3451-4E2A-8D45-91B22789A654}.Release|Any CPU.Build.0 = Release|Any CPU
-		{06D4A582-2625-9C66-0EDE-42FE9D7C2C32}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{06D4A582-2625-9C66-0EDE-42FE9D7C2C32}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{06D4A582-2625-9C66-0EDE-42FE9D7C2C32}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{06D4A582-2625-9C66-0EDE-42FE9D7C2C32}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8A004146-1D42-0602-A343-187B00946B0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A004146-1D42-0602-A343-187B00946B0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A004146-1D42-0602-A343-187B00946B0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A004146-1D42-0602-A343-187B00946B0B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MqttNet.ReactiveBinding\Net.Mqtt.ReactiveOrm.csproj" />
+    <ProjectReference Include="..\Net.Mqtt.ReactiveOrm\Net.Mqtt.ReactiveOrm.csproj" />
   </ItemGroup>
 
 </Project>
