@@ -54,7 +54,14 @@ namespace Net.Mqtt.ReactiveOrm
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
+            var properties = message.GetType().GetProperties();
+
             _mqttBus.PublishAsync<T>(message, _attribute).GetAwaiter().GetResult();
+            foreach ( var property in properties )
+            {
+
+            }
+
         }
 
         /// <summary>

@@ -12,7 +12,7 @@
     <PackageProjectUrl>https://github.com/JoeDevSharp</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/JoeDevSharp/Net.Mqtt.ReactiveOrm</RepositoryUrl>
-    <PackageIcon>MQTT.Extention.icon.png</PackageIcon>
+    <PackageIcon>JoeDevSharp.MqttNet.ReactiveBinding.logo.png</PackageIcon>
     <RootNamespace>$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <PackageTags>mqtt, mqttnet, reactive, orm, dotnet, csharp, mqtt-client, iot, mqtt-broker, observable, pubsub, mqtt-mapping, system-integration, mqtt-orm, mqtt-framework, typed-topics, serialization, json, mqtt-wrapper, mqtt-abstraction</PackageTags>
     <Version>1.0.4</Version>
@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\..\..\iCloudDrive\JoeDev\Logos\MQTT.Extention.icon.png">
+    <None Include="..\JoeDevSharp.MqttNet.ReactiveBinding.logo.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
