@@ -1,206 +1,139 @@
-﻿using Net.Mqtt.ReactiveOrm.Attributes;
-using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using MQTTnet;
-using MQTTnet.Protocol;
+using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
+using Net.Mqtt.ReactiveOrm.Enums;
+using Net.Mqtt.ReactiveOrm.Models;
 using System.Collections.Concurrent;
-using System.Reactive.Linq;
-using System.Reactive.Subjects;
-using System.Text;
-using System.Text.RegularExpressions;
+using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 
-namespace Net.Mqtt.ReactiveOrm.Bus
+namespace Net.Mqtt.ReactiveOrm.Bus;
+
+/// <summary>MQTTnet-only implementation of the injectable transport boundary.</summary>
+public sealed class MqttNetBus : IMqttBus
 {
-    /// <summary>
-    /// Implementación por defecto de <see cref="IMqttBus"/> utilizando MQTTnet.
-    /// Gestiona suscripciones reactivas y la publicación de mensajes fuertemente tipados sobre MQTT.
-    /// </summary>
-    public class MqttBus : IMqttBus
+    private readonly IMqttClient _client;
+    private readonly MqttClientOptions _options;
+    private readonly SemaphoreSlim _lifecycle = new(1, 1);
+    private readonly ConcurrentDictionary<Guid, Subscriber> _subscribers = new();
+    private int _state = (int)ConnectionState.Disconnected;
+
+    public MqttNetBus(MqttClientOptions options)
+        : this(new MqttClientFactory().CreateMqttClient(), options)
     {
-        private readonly IMqttClient _client;
-        private readonly MqttClientOptions _options;
-        private readonly MqttSerializer _serializer;
-        private readonly ConcurrentDictionary<string, Func<string, Task>> _handlers = new();
-        private readonly Dictionary<Type, object> _subjects = new();
-        private readonly HashSet<Type> _subscribedTypes = new();
-        private readonly Dictionary<Type, TopicAttribute> _topicAttributes = new();
-        private readonly ConcurrentDictionary<Type, Task> _subscriptionTasks = new();
+    }
 
-        /// <summary>
-        /// Crea una nueva instancia de <see cref="MqttBus"/>.
-        /// </summary>
-        /// <param name="client">Instancia del cliente MQTT.</param>
-        /// <param name="options">Opciones de conexión para el cliente MQTT.</param>
-        /// <param name="serializer">Serializador para transformar mensajes.</param>
-        public MqttBus(IMqttClient client, MqttClientOptions options, MqttSerializer serializer)
+    public MqttNetBus(IMqttClient client, MqttClientOptions options)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _client.ApplicationMessageReceivedAsync += OnMessageAsync;
+        _client.DisconnectedAsync += _ => { Volatile.Write(ref _state, (int)ConnectionState.Disconnected); return Task.CompletedTask; };
+    }
+
+    public ConnectionState State => (ConnectionState)Volatile.Read(ref _state);
+
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
+    {
+        await _lifecycle.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            _client = client;
-            _options = options;
-            _serializer = serializer;
-
-            // Registro del evento para manejar mensajes recibidos
-            _client.ApplicationMessageReceivedAsync += OnApplicationMessageReceivedAsync;
-        }
-
-        /// <inheritdoc />
-        public async Task ConnectAsync()
-        {
-            if (!_client.IsConnected)
+            if (_client.IsConnected) { Volatile.Write(ref _state, (int)ConnectionState.Connected); return; }
+            Volatile.Write(ref _state, (int)ConnectionState.Connecting);
+            try
             {
-                await _client.ConnectAsync(_options);
+                await _client.ConnectAsync(_options, cancellationToken).ConfigureAwait(false);
+                Volatile.Write(ref _state, (int)ConnectionState.Connected);
             }
+            catch { Volatile.Write(ref _state, (int)ConnectionState.Faulted); throw; }
         }
+        finally { _lifecycle.Release(); }
+    }
 
-        /// <inheritdoc />
-        public IObservable<T> GetObservable<T>(TopicAttribute attribute)
+    public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    {
+        await _lifecycle.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            if (!_subjects.TryGetValue(typeof(T), out var subjectObj))
-            {
-                var subject = new Subject<T>();
-                _subjects[typeof(T)] = subject;
-                _topicAttributes[typeof(T)] = attribute;
-
-                // Garantiza que se haya realizado la suscripción
-                EnsureSubscribedAsync<T>().GetAwaiter().GetResult();
-
-                return subject.AsObservable();
-            }
-
-            return ((ISubject<T>)subjectObj).AsObservable();
+            if (!_client.IsConnected) { Volatile.Write(ref _state, (int)ConnectionState.Disconnected); return; }
+            Volatile.Write(ref _state, (int)ConnectionState.Disconnecting);
+            await _client.DisconnectAsync(new MqttClientDisconnectOptions(), cancellationToken).ConfigureAwait(false);
+            Volatile.Write(ref _state, (int)ConnectionState.Disconnected);
         }
+        finally { _lifecycle.Release(); }
+    }
 
-        /// <summary>
-        /// Garantiza que el tipo de mensaje <typeparamref name="T"/> esté suscrito solo una vez.
-        /// </summary>
-        private Task EnsureSubscribedAsync<T>()
+    public async IAsyncEnumerable<MqttDelivery> SubscribeAsync(MqttSubscription subscription, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(subscription);
+        await ConnectAsync(cancellationToken).ConfigureAwait(false);
+        var id = Guid.NewGuid();
+        if (subscription.Capacity <= 0) throw new ArgumentOutOfRangeException(nameof(subscription));
+        var subscriber = new Subscriber(subscription.TopicFilter, Channel.CreateBounded<MqttDelivery>(new BoundedChannelOptions(subscription.Capacity)
         {
-            var type = typeof(T);
-
-            return _subscriptionTasks.GetOrAdd(type, async _ =>
-            {
-                if (!_topicAttributes.TryGetValue(type, out var attribute))
-                    throw new InvalidOperationException($"El tipo {type.Name} no está registrado. Usa Register<T>(TopicAttribute).");
-
-                var topic = attribute.Resolve(Activator.CreateInstance(type));
-
-                _handlers[topic] = async raw =>
-                {
-                    var message = _serializer.Deserialize<T>(raw);
-                    if (_subjects.TryGetValue(type, out var subj))
-                    {
-                        ((ISubject<T>)subj).OnNext(message);
-                    }
-
-                    await Task.CompletedTask;
-                };
-
-                await ConnectAsync();
-                await _client.SubscribeAsync(topic, attribute.QoS);
-            });
-        }
-
-        /// <inheritdoc />
-        public async Task PublishAsync<T>(object message, TopicAttribute attribute)
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true
+        }));
+        _subscribers[id] = subscriber;
+        try
         {
-            var topic = attribute.Resolve(Activator.CreateInstance<T>());
-            var payload = _serializer.Serialize(message);
-
-            var msg = new MqttApplicationMessageBuilder()
-                .WithTopic(topic)
-                .WithPayload(payload)
-                .WithQualityOfServiceLevel(attribute.QoS)
-                .WithRetainFlag(attribute.Retain)
-                .Build();
-
-            await ConnectAsync();
-            await _client.PublishAsync(msg);
-
-            Console.WriteLine($"Mensaje publicado: {typeof(T).Name} en el topic {topic}");
+            await _client.SubscribeAsync(subscription.TopicFilter, (MQTTnet.Protocol.MqttQualityOfServiceLevel)subscription.QoS, cancellationToken).ConfigureAwait(false);
+            await foreach (var delivery in subscriber.Channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)) yield return delivery;
         }
-
-        public async Task PublishAsync<T>(object message, TopicAttribute attribute, MqttQualityOfServiceLevel qos, bool retain)
+        finally
         {
-            var topic = attribute.Resolve(Activator.CreateInstance<T>());
-            var payload = _serializer.Serialize(message);
-
-            var msg = new MqttApplicationMessageBuilder()
-                .WithTopic(topic)
-                .WithPayload(payload)
-                .WithQualityOfServiceLevel(qos)
-                .WithRetainFlag(retain)
-                .Build();
-
-            await ConnectAsync();
-            await _client.PublishAsync(msg);
-
-            Console.WriteLine($"Mensaje publicado: {typeof(T).Name} en el topic {topic}");
+            _subscribers.TryRemove(id, out _);
+            if (_client.IsConnected && !_subscribers.Values.Any(x => x.Filter == subscription.TopicFilter))
+                await _client.UnsubscribeAsync(subscription.TopicFilter, CancellationToken.None).ConfigureAwait(false);
         }
+    }
 
-        /// <inheritdoc />
-        public async Task UnsubscribeAsync<T>(TopicAttribute attribute)
+    public async Task<MqttPublishResult> PublishAsync(MqttPublication publication, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(publication);
+        await ConnectAsync(cancellationToken).ConfigureAwait(false);
+        var message = new MqttApplicationMessageBuilder().WithTopic(publication.Topic)
+            .WithPayload(publication.Payload.ToArray()).WithQualityOfServiceLevel((MQTTnet.Protocol.MqttQualityOfServiceLevel)publication.QoS)
+            .WithRetainFlag(publication.Retain).Build();
+        var result = await _client.PublishAsync(message, cancellationToken).ConfigureAwait(false);
+        return new(result.IsSuccess, result.ReasonString);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        foreach (var subscriber in _subscribers.Values) subscriber.Channel.Writer.TryComplete();
+        await DisconnectAsync().ConfigureAwait(false);
+        _client.ApplicationMessageReceivedAsync -= OnMessageAsync;
+        _client.Dispose();
+        _lifecycle.Dispose();
+    }
+
+    private async Task OnMessageAsync(MqttApplicationMessageReceivedEventArgs args)
+    {
+        var message = args.ApplicationMessage;
+        args.AutoAcknowledge = false;
+        var subscribers = _subscribers.Values
+            .Where(subscriber => MqttTopicFilterComparer.Compare(message.Topic, subscriber.Filter) == MqttTopicFilterCompareResult.IsMatch)
+            .ToArray();
+        if (subscribers.Length == 0)
         {
-            var topic = attribute.Resolve(Activator.CreateInstance<T>());
-
-            if (_handlers.TryRemove(topic, out _))
-            {
-                if (_client.IsConnected)
-                {
-                    await _client.UnsubscribeAsync(topic);
-                }
-            }
-            else
-            {
-                throw new InvalidOperationException($"No hay handler registrado para el topic '{topic}' que se pueda cancelar.");
-            }
+            await args.AcknowledgeAsync(CancellationToken.None).ConfigureAwait(false);
+            return;
         }
 
-        #region Métodos privados
+        var acknowledgement = new SharedAcknowledgement(subscribers.Length, args.AcknowledgeAsync);
+        var delivery = new MqttDelivery(message.Topic, message.Payload.ToArray(), (QoSLevel)message.QualityOfServiceLevel,
+            message.Retain, acknowledgement.AcknowledgeAsync);
+        foreach (var subscriber in subscribers)
+            await subscriber.Channel.Writer.WriteAsync(delivery).ConfigureAwait(false);
+    }
 
-        /// <summary>
-        /// Método central para el despacho de mensajes MQTT entrantes.
-        /// Se invoca automáticamente cuando se recibe un mensaje desde el broker.
-        /// </summary>
-        private async Task OnApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs e)
-        {
-            var topic = e.ApplicationMessage.Topic;
-            var payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
+    private sealed record Subscriber(string Filter, Channel<MqttDelivery> Channel);
 
-            // Coincidencia exacta del topic
-            if (_handlers.TryGetValue(topic, out var handler))
-            {
-                await handler(payload);
-                return;
-            }
-
-            // Coincidencia con patrón wildcard
-            foreach (var kv in _handlers)
-            {
-                if (MatchTopic(kv.Key, topic))
-                {
-                    await kv.Value(payload);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Ejecuta la deserialización del mensaje y llama al manejador.
-        /// </summary>
-        private async Task DispatchAsync<T>(string raw, Func<T, Task> handler)
-        {
-            var obj = _serializer.Deserialize<T>(raw);
-            await handler(obj);
-        }
-
-        /// <summary>
-        /// Realiza el emparejamiento de topics MQTT con comodines (‘+’, ‘#’).
-        /// </summary>
-        private static bool MatchTopic(string pattern, string topic)
-        {
-            var regex = "^" + Regex.Escape(pattern)
-                .Replace("\\+", "[^/]+")
-                .Replace("\\#", ".*") + "$";
-            return Regex.IsMatch(topic, regex);
-        }
-
-        #endregion
+    private sealed class SharedAcknowledgement(int remaining, Func<CancellationToken, Task> acknowledge)
+    {
+        private int _remaining = remaining;
+        public Task AcknowledgeAsync(CancellationToken cancellationToken) =>
+            Interlocked.Decrement(ref _remaining) == 0 ? acknowledge(cancellationToken) : Task.CompletedTask;
     }
 }

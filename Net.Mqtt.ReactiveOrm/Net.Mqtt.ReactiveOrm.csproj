@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
@@ -15,7 +15,7 @@
     <PackageIcon>JoeDevSharp.MqttNet.ReactiveBinding.logo.png</PackageIcon>
     <RootNamespace>$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <PackageTags>mqtt, mqttnet, reactive, orm, dotnet, csharp, mqtt-client, iot, mqtt-broker, observable, pubsub, mqtt-mapping, system-integration, mqtt-orm, mqtt-framework, typed-topics, serialization, json, mqtt-wrapper, mqtt-abstraction</PackageTags>
-    <Version>1.0.4</Version>
+    <Version>2.0.0</Version>
     <Copyright></Copyright>
     <PackageOutputPath>bin/nuget</PackageOutputPath>
     <Product>$(AssemblyName)</Product>
@@ -38,8 +38,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MQTTnet" Version="5.0.1.1416" />
-    <PackageReference Include="System.Reactive" Version="6.0.1" />
+    <PackageReference Include="MQTTnet" Version="5.2.0.1603" />
+    <PackageReference Include="System.Reactive" Version="7.0.0" />
   </ItemGroup>
 
 </Project>

@@ -1,91 +1,82 @@
-﻿using Net.Mqtt.ReactiveOrm.Attributes;
 using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using Net.Mqtt.ReactiveOrm.Enums;
 using Net.Mqtt.ReactiveOrm.Interfaces;
-using MQTTnet.Protocol;
+using Net.Mqtt.ReactiveOrm.Models;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
+using System.Runtime.CompilerServices;
 
-namespace Net.Mqtt.ReactiveOrm
+namespace Net.Mqtt.ReactiveOrm;
+
+public sealed class TopicSet<T> : ITopicSet<T>
 {
-    /// <summary>
-    /// Representa un conjunto reactivo de tópicos MQTT fuertemente tipados.
-    /// Permite publicar y suscribirse a mensajes de tipo <typeparamref name="T"/> sobre un tópico específico.
-    /// </summary>
-    public partial class TopicSet<T> : ITopicSet<T>, IObservable<T>
+    private readonly IMqttCodec _codec;
+    public IMqttBus MqttBus { get; }
+    public TopicDefinition Definition { get; }
+    public string Template => Definition.Template;
+
+    public TopicSet(IMqttBus mqttBus, IMqttCodec codec, TopicDefinition definition)
     {
-        /// <summary>
-        /// Instancia del bus MQTT utilizado por este conjunto de tópicos.
-        /// </summary>
-        public IMqttBus MqttBus => _mqttBus;
+        MqttBus = mqttBus ?? throw new ArgumentNullException(nameof(mqttBus));
+        _codec = codec ?? throw new ArgumentNullException(nameof(codec));
+        Definition = definition ?? throw new ArgumentNullException(nameof(definition));
+    }
 
-        /// <summary>
-        /// Atributo del tópico que define la plantilla, QoS, retención y comodines.
-        /// </summary>
-        public TopicAttribute Attribute => _attribute;
+    public Task PublishAsync(T data, CancellationToken cancellationToken = default) =>
+        PublishAsync(data, CloudEventPublishOptions.Default, cancellationToken);
 
-        /// <summary>
-        /// Plantilla del tópico MQTT.
-        /// </summary>
-        public string Template => _attribute.Template;
+    public async Task PublishAsync(T data, CloudEventPublishOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(options);
+        var publication = new MqttPublication(
+            Definition.Resolve<T>(), _codec.Encode(data), options.QoS ?? Definition.QoS, options.Retain ?? Definition.Retain);
+        var result = await MqttBus.PublishAsync(publication, cancellationToken).ConfigureAwait(false);
+        if (!result.IsSuccess) throw new InvalidOperationException(result.Reason ?? "The MQTT publication failed.");
+    }
 
-        private readonly IMqttBus _mqttBus;
-        private readonly TopicAttribute _attribute;
-
-        private IObservable<T> _observable => _mqttBus.GetObservable<T>(_attribute);
-
-        /// <summary>
-        /// Inicializa una nueva instancia de la clase <see cref="TopicSet{T}"/>.
-        /// </summary>
-        /// <param name="mqttBus">Instancia del bus MQTT.</param>
-        /// <param name="attribute">Atributo del tópico asociado.</param>
-        /// <exception cref="ArgumentNullException">Si <paramref name="mqttBus"/> o <paramref name="attribute"/> es null.</exception>
-        public TopicSet(IMqttBus mqttBus, TopicAttribute attribute)
+    public async IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+    {
+        await foreach (var message in ReadAllAsync(SubscriptionOptions.Default, cancellationToken).ConfigureAwait(false))
         {
-            _mqttBus = mqttBus ?? throw new ArgumentNullException(nameof(mqttBus));
-            _attribute = attribute ?? throw new ArgumentNullException(nameof(attribute));
+            yield return message.Data;
+            await message.AcknowledgeAsync(cancellationToken).ConfigureAwait(false);
         }
+    }
 
-        /// <summary>
-        /// Publica un mensaje usando los valores de QoS y retención definidos por defecto en el atributo del tópico.
-        /// </summary>
-        /// <param name="message">Mensaje a publicar.</param>
-        /// <exception cref="ArgumentNullException">Si <paramref name="message"/> es null.</exception>
-        public void Publish(T message)
+    public async IAsyncEnumerable<MqttMessageContext<T>> ReadAllAsync(
+        SubscriptionOptions options,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.Capacity <= 0) throw new ArgumentOutOfRangeException(nameof(options), "Capacity must be greater than zero.");
+        var subscription = new MqttSubscription(Definition.Resolve<T>(), options.QoS ?? Definition.QoS, options.Capacity);
+        await foreach (var delivery in MqttBus.SubscribeAsync(subscription, cancellationToken).ConfigureAwait(false))
+            yield return new MqttMessageContext<T>(_codec.Decode<T>(delivery.Payload), delivery);
+    }
+
+    public IDisposable Subscribe(IObserver<T> observer)
+    {
+        ArgumentNullException.ThrowIfNull(observer);
+        var cancellation = new CancellationTokenSource();
+        _ = ObserveAsync(observer, cancellation.Token);
+        return Disposable.Create(cancellation, static source => { source.Cancel(); source.Dispose(); });
+    }
+
+    public IObservable<T> Where(Func<T, bool> predicate) => Observable.Create<T>(Subscribe).Where(predicate);
+
+    private async Task ObserveAsync(IObserver<T> observer, CancellationToken cancellationToken)
+    {
+        try
         {
-            if (message == null)
-                throw new ArgumentNullException(nameof(message));
-
-            var properties = message.GetType().GetProperties();
-
-            _mqttBus.PublishAsync<T>(message, _attribute).GetAwaiter().GetResult();
-            foreach ( var property in properties )
+            await foreach (var message in ReadAllAsync(SubscriptionOptions.Default, cancellationToken).ConfigureAwait(false))
             {
-
+                observer.OnNext(message.Data);
+                await message.AcknowledgeAsync(cancellationToken).ConfigureAwait(false);
             }
-
+            observer.OnCompleted();
         }
-
-        /// <summary>
-        /// Publica un mensaje sobreescribiendo los valores de QoS y retención para esta publicación específica.
-        /// </summary>
-        /// <param name="message">Mensaje a publicar.</param>
-        /// <param name="qos">Nivel de QoS a utilizar para esta publicación.</param>
-        /// <param name="retain">Indica si el mensaje debe ser retenido.</param>
-        /// <exception cref="ArgumentNullException">Si <paramref name="message"/> es null.</exception>
-        public void Publish(T message, QoSLevel qos, bool retain)
-        {
-            if (message == null)
-                throw new ArgumentNullException(nameof(message));
-
-            var mqttQoS = (MqttQualityOfServiceLevel)qos;
-            _mqttBus.PublishAsync<T>(message, _attribute, mqttQoS, retain).GetAwaiter().GetResult();
-        }
-
-        /// <summary>
-        /// Cancela la suscripción al tópico.
-        /// </summary>
-        public void Unsubscribe()
-        {
-            _mqttBus.UnsubscribeAsync<T>(_attribute).GetAwaiter().GetResult();
-        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception exception) { observer.OnError(exception); }
     }
 }

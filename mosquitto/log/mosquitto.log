@@ -1,0 +1,33 @@
+1787565560: mosquitto version 2.1.2 starting
+1787565560: Config loaded from /mosquitto/config/mosquitto.conf.
+1787565560: Bridge support available.
+1787565560: Persistence support available.
+1787565560: TLS support available.
+1787565560: TLS-PSK support available.
+1787565560: Websockets support available.
+1787565560: Opening ipv4 listen socket on port 1883.
+1787565560: Opening ipv6 listen socket on port 1883.
+1787565560: Opening ipv4 listen socket on port 9001.
+1787565560: Opening ipv6 listen socket on port 9001.
+1787565560: mosquitto version 2.1.2 running
+1787565631: New connection from 172.19.0.1:32790 on port 1883.
+1787565631: New client connected from 172.19.0.1:32790 as mqtt-explorer-671705bd (p4, c1, k60).
+1787565652: New connection from 172.19.0.1:41730 on port 1883.
+1787565652: New client connected from 172.19.0.1:41730 as mqttorm-79b1e2a5-f13d-4ed7-afdf-313f2c8d77f7 (p5, c1, k15).
+1787565685: Client mqttorm-79b1e2a5-f13d-4ed7-afdf-313f2c8d77f7 [172.19.0.1:41730] disconnected: connection closed by client.
+1787565688: New connection from 172.19.0.1:48596 on port 1883.
+1787565688: New client connected from 172.19.0.1:48596 as mqttorm-cdc41103-0631-4a69-a774-7d7172cf03ba (p5, c1, k15).
+1787565707: Client mqttorm-cdc41103-0631-4a69-a774-7d7172cf03ba [172.19.0.1:48596] disconnected: connection closed by client.
+1787565709: New connection from 172.19.0.1:55940 on port 1883.
+1787565709: New client connected from 172.19.0.1:55940 as mqttorm-cd43c18f-a3ca-4fc2-822d-572b8c421525 (p5, c1, k15).
+1787565714: Client mqttorm-cd43c18f-a3ca-4fc2-822d-572b8c421525 [172.19.0.1:55940] disconnected: connection closed by client.
+1787567361: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1787572453: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1787574315: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1787576116: Saving in-memory database to /mosquitto/data//mosquitto.db.
+1787583253: New connection from 172.19.0.1:59744 on port 1883.
+1787583253: New client connected from 172.19.0.1:59744 as 803ab2c03b6946958067179189a41a90 (p5, c1, k15).
+1787583262: Client 803ab2c03b6946958067179189a41a90 [172.19.0.1:59744] disconnected: connection closed by client.
+1787583269: New connection from 172.19.0.1:44800 on port 1883.
+1787583269: New client connected from 172.19.0.1:44800 as a57a045b19cc4e798780018d4ff19e06 (p5, c1, k15).
+1787583274: Client a57a045b19cc4e798780018d4ff19e06 [172.19.0.1:44800] disconnected: connection closed by client.

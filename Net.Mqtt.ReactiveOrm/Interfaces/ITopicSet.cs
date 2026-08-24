@@ -1,42 +1,13 @@
-﻿using Net.Mqtt.ReactiveOrm.Attributes;
 using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
-using Net.Mqtt.ReactiveOrm.Enums;
+using Net.Mqtt.ReactiveOrm.Models;
 
-namespace Net.Mqtt.ReactiveOrm.Interfaces
+namespace Net.Mqtt.ReactiveOrm.Interfaces;
+
+public interface ITopicSet<T> : IObservable<T>, IAsyncEnumerable<T>
 {
-    /// <summary>
-    /// Representa un conjunto de tópicos MQTT fuertemente tipados, con capacidades de observación, publicación y cancelación de suscripción.
-    /// </summary>
-    public interface ITopicSet<T> : IObservable<T>
-    {
-        /// <summary>
-        /// Instancia del bus MQTT utilizada para las operaciones.
-        /// </summary>
-        IMqttBus MqttBus { get; }
-
-        /// <summary>
-        /// Atributo del tópico que define plantilla y configuración.
-        /// </summary>
-        TopicAttribute Attribute { get; }
-
-        /// <summary>
-        /// Plantilla del tópico MQTT (por ejemplo, "sensor/{deviceId}/temperature").
-        /// </summary>
-        string Template { get; }
-
-        /// <summary>
-        /// Publica un mensaje en el tópico MQTT.
-        /// </summary>
-        void Publish(T message);
-
-        /// <summary>
-        /// Publica un mensaje en el tópico MQTT, reescribe Qos y Retail.
-        /// </summary>
-        void Publish(T message, QoSLevel qos, bool retain);
-
-        /// <summary>
-        /// Cancela la suscripción del tipo de mensaje asociado.
-        /// </summary>
-        void Unsubscribe();
-    }
+    IMqttBus MqttBus { get; }
+    TopicDefinition Definition { get; }
+    string Template { get; }
+    Task PublishAsync(T data, CloudEventPublishOptions options, CancellationToken cancellationToken);
+    IAsyncEnumerable<MqttMessageContext<T>> ReadAllAsync(SubscriptionOptions options, CancellationToken cancellationToken);
 }

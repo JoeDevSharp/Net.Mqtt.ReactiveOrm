@@ -1,14 +1,18 @@
 ﻿
 using System.Reactive.Linq;
+using MQTTnet;
+using Net.Mqtt.ReactiveOrm.Bus;
 
 namespace Demo
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             // Crear una nueva instancia del contexto MQTT, que gestiona la conexión y los temas MQTT
-            var context = new MqttContext();
+            var options = new MqttClientOptionsBuilder().WithTcpServer("localhost", 1883).Build();
+            await using var bus = new MqttNetBus(options);
+            var context = new MqttContext(bus, MqttContext.CreateModel());
 
             // Suscribirse al tema DHT230222_Modules y filtrar los mensajes donde la temperatura es mayor a 20.5°C
             // Solo los módulos que cumplen esta condición activarán la acción definida en Subscribe
@@ -24,7 +28,7 @@ namespace Demo
 
             // Publicar un mensaje de ejemplo en el tema DHT230222_Modules
             // Se envía un objeto con temperatura 18°C y humedad 45%
-            context.DHT230222_Modules.Publish(new()
+            await context.DHT230222_Modules.PublishAsync(new()
             {
                 Temperature = 30,
                 Humidity = 45.0,
