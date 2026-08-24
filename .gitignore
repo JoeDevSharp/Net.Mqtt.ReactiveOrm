@@ -1,3 +1,4 @@
 **/.vs
 **/bin
 **/obj
+mosquitto/log/mosquitto.log
