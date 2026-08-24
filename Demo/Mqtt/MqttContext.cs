@@ -13,7 +13,7 @@ public class DHT230222_Modules
 public class MqttContext : MqttOrmContext
 {
     /// <summary>
-    /// Tópico con objeto complejo, QoS alto y retención activada.
+    /// Flujo de eventos con objeto complejo, sin retención.
     /// </summary>
     public TopicSet<DHT230222_Modules> DHT230222_Modules => Set<DHT230222_Modules>();
 
@@ -43,7 +43,7 @@ public class MqttContext : MqttOrmContext
     public MqttContext(IMqttBus bus, ITopicModel model) : base(bus, model) { }
 
     public static TopicModel CreateModel() => new TopicModelBuilder()
-        .Add<DHT230222_Modules>(nameof(DHT230222_Modules), "factory_64/sensors/@/status", QoSLevel.ExactlyOnce, retain: true)
+        .Add<DHT230222_Modules>(nameof(DHT230222_Modules), "factory_64/sensors/@/events", QoSLevel.ExactlyOnce)
         .Add<DHT230222_Modules>(nameof(Z_XTR_Modules), "factory_64/module/@/status", QoSLevel.AtLeastOnce)
         .Add<double>(nameof(TemperatureRaw), "factory_64/sensors/temperature/value")
         .Add<DHT230222_Modules>(nameof(AllSensors), "factory_64/+/+/status")
