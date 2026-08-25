@@ -1,14 +1,18 @@
 using Demo.Entities;
 using Demo.Mqtt;
 using Microsoft.Extensions.Hosting;
-using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
-using Net.Mqtt.ReactiveOrm.Models;
-using Net.Mqtt.ReactiveOrm.CloudEvents;
+using Net.Mqtt.Infrastructure.Bus.Interfaces;
+using Net.Mqtt.Infrastructure.Models;
+using Net.Mqtt.Infrastructure.CloudEvents;
 
 namespace Demo;
 
+/// <summary>Demonstrates ordered subscription, publication, consumption, and acknowledgement.</summary>
+/// <param name="context">The demo MQTT context.</param>
+/// <param name="bus">The shared MQTT transport.</param>
 public sealed class SensorWorker(MqttContext context, IMqttBus bus) : BackgroundService
 {
+    /// <summary>Runs the demo workflow until host shutdown is requested.</summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var subscriptionReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
