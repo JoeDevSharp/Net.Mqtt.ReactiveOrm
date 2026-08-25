@@ -21,12 +21,25 @@ public interface IMqttContractPackage
 public sealed class MqttSchemaBuilder
 {
     private readonly InMemoryJsonSchemaResolver _inline = new();
+    private readonly Dictionary<Uri, string> _files = [];
     private readonly List<IJsonSchemaResolver> _resolvers = [];
 
     /// <summary>Adds the add inline operation.</summary>
     public MqttSchemaBuilder AddInline(string uri, string jsonSchema, string version)
     {
         _inline.Add(new Uri(uri, UriKind.Absolute), jsonSchema, version);
+        return this;
+    }
+
+    /// <summary>Registers a governed JSON Schema stored in a local file.</summary>
+    /// <param name="uri">The absolute dataschema URI used by CloudEvents.</param>
+    /// <param name="filePath">The path of the JSON Schema file.</param>
+    /// <returns>This builder so additional schemas can be registered.</returns>
+    public MqttSchemaBuilder Add(string uri, string filePath)
+    {
+        var schemaUri = new Uri(uri, UriKind.Absolute);
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+        _files[schemaUri] = Path.GetFullPath(filePath);
         return this;
     }
 
@@ -40,6 +53,7 @@ public sealed class MqttSchemaBuilder
     internal IJsonSchemaResolver Build()
     {
         var all = new List<IJsonSchemaResolver> { _inline };
+        if (_files.Count > 0) all.Add(new FileJsonSchemaResolver(_files));
         all.AddRange(_resolvers);
         return new CompositeJsonSchemaResolver([.. all]);
     }

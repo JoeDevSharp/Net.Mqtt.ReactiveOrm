@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:schema:factory:bs1-operational-assessment:v1",
+  "title": "BS1 Operational Assessment",
+  "type": "object",
+  "required": ["areaId", "riskLevel", "recommendedAction", "assessedAt"],
+  "properties": {
+    "areaId": { "type": "string", "minLength": 1 },
+    "riskLevel": { "type": "string", "enum": ["normal", "warning", "critical"] },
+    "recommendedAction": { "type": "string", "minLength": 1 },
+    "assessedAt": { "type": "string" }
+  },
+  "additionalProperties": false
+}

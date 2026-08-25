@@ -1,59 +1,125 @@
-// Importa el Worker que procesará los eventos MQTT.
-using Demo;
-// Importa el contrato de datos registrado en el metamodelo.
+// Imports the data contracts exchanged through CloudEvents.
 using Demo.Entities;
-// Importa el contexto que declara los TopicSet mediante atributos.
+// Imports the context that declares the application's typed TopicSet instances.
 using Demo.Mqtt;
-// Habilita la API fluent y el registro de servicios.
+// Imports the services that contain the BS1 and BS2 business rules.
+using Demo.Services;
+// Imports the BackgroundService implementations that orchestrate the use cases.
+using Demo.Workers;
+// Enables dependency and Hosted Service registration.
 using Microsoft.Extensions.DependencyInjection;
-// Proporciona el Generic Host y su ciclo de vida.
+// Provides Generic Host, configuration, logging, and graceful shutdown.
 using Microsoft.Extensions.Hosting;
 
-// Crea el Host con logging, configuración y cancelación mediante Ctrl+C.
+// Creates the demo Host. The Host cancellation token is propagated to every Worker.
 var builder = Host.CreateApplicationBuilder(args);
 
-// Configura toda la infraestructura MQTT desde un único punto de entrada.
+// Registers the complete MQTT infrastructure and typed context through one fluent entry point.
+// The library creates a singleton IMqttBus, so every Worker shares the same connection.
 builder.Services.AddMqttReactiveOrm<MqttContext>(mqtt =>
 {
-    // Configura conexión, identidad técnica, namespace y source CloudEvents mediante una cadena fluent.
+    // Configures the transport and the process's technical identity.
     mqtt.ConnectTo("localhost", 1883)
-        .IdentifyAs("reactive-orm-demo-worker")
+        // Uses a stable ClientId so the broker can identify this instance.
+        .IdentifyAs("business-workers-demo")
+        // Restricts the topics declared by the context to the module namespace.
         .ForModule("factory_64")
-        .WithCloudEventSource("urn:factory:equipment-worker")
+        // Defines the CloudEvents source attribute for every published event.
+        .WithCloudEventSource("urn:factory:business-workers")
+        // Enables MQTT 5, a clean session, and fast reconnection for local development.
         .UseDevelopmentDefaults()
+        // Declares an UNAVAILABLE Last Will CloudEvent for an ungraceful connection loss.
         .UseUnavailableLastWill();
 
-    // Registra la relación type CloudEvents, dataschema, versión y tipo C#.
-    mqtt.UseContracts(contracts => contracts.Add<DHT230222_Modules>(
-        eventType: "com.factory.sensor.reading.v1",
-        dataSchema: new Uri("urn:schema:factory:sensor-reading:v1"),
-        version: new Version(1, 0, 0),
-        maximumDataSize: 16 * 1024,
-        forbiddenFields: ["password", "secret"]));
+    // Associates each C# type with its governed CloudEvents identity.
+    // The registry contains no topics; they are declared once in MqttContext.
+    mqtt.UseContracts(contracts =>
+    {
+        // BS1 input: temperature and humidity telemetry produced by sensor1.
+        contracts.Add<Sensor1Telemetry>(
+            eventType: "com.factory.bs1.environment.input.v1",
+            dataSchema: new Uri("urn:schema:factory:bs1-environment-input:v1"),
+            version: new Version(1, 0, 0),
+            maximumDataSize: 16 * 1024);
 
-    // Registra el JSON Schema local; se puede sustituir por un resolver de archivos o HTTP.
-    mqtt.UseSchemas(schemas => schemas.AddInline(
-        uri: "urn:schema:factory:sensor-reading:v1",
-        jsonSchema:
-        """
-        {
-          "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "type": "object",
-          "required": ["temperature", "humidity", "timestamp"],
-          "properties": {
-            "temperature": { "type": "number", "minimum": -273.15 },
-            "humidity": { "type": "number", "minimum": 0, "maximum": 100 },
-            "timestamp": { "type": "string" }
-          },
-          "additionalProperties": false
-        }
-        """,
-        version: "1.0.0")
-    );
+        // BS2 input: one binary fragment from the sensor2 video stream.
+        // byte[] is serialized as Base64 inside the CloudEvent JSON data value.
+        contracts.Add<Sensor2VideoChunk>(
+            eventType: "com.factory.bs2.video.chunk.v1",
+            dataSchema: new Uri("urn:schema:factory:bs2-video-chunk:v1"),
+            version: new Version(1, 0, 0),
+            maximumDataSize: 256 * 1024);
+
+        // BS1 output: an operational decision produced by Worker BS1 and BusinessServiceBs1.
+        contracts.Add<Bs1OperationalAssessment>(
+            eventType: "com.factory.bs1.operational-assessment.v1",
+            dataSchema: new Uri("urn:schema:factory:bs1-operational-assessment:v1"),
+            version: new Version(1, 0, 0));
+
+        // BS2 output: the result published after the video stream has been assembled.
+        contracts.Add<Bs2VideoResult>(
+            eventType: "com.factory.bs2.video-result.v1",
+            dataSchema: new Uri("urn:schema:factory:bs2-video-result:v1"),
+            version: new Version(1, 0, 0));
+    });
+
+    // Registers the JSON Schema associated with each dataschema above.
+    // The library validates data before publication and before delivery to a Worker.
+    mqtt.UseSchemas(schemas =>
+    {
+        // Input contracts received from devices remain inline to demonstrate
+        // a self-contained configuration that is easy to run.
+        schemas.AddInline("urn:schema:factory:bs1-environment-input:v1",
+            """
+            { "type":"object", "required":["sensorId","temperature","humidity","observedAt"],
+              "properties":{ "sensorId":{"type":"string"}, "temperature":{"type":"number"},
+                "humidity":{"type":"number","minimum":0,"maximum":100}, "observedAt":{"type":"string"} },
+              "additionalProperties":false }
+            """,
+            version: "1.0.0");
+
+        // The binary payload is represented as a Base64 string in JSON.
+        // Capacity and maximumDataSize prevent an entire stream from using one message.
+        schemas.AddInline("urn:schema:factory:bs2-video-chunk:v1",
+            """
+            { "type":"object", "required":["cameraId","streamId","sequence","isFinal","mediaType","payload","capturedAt"],
+              "properties":{ "cameraId":{"type":"string"}, "streamId":{"type":"string"},
+                "sequence":{"type":"integer","minimum":0}, "isFinal":{"type":"boolean"},
+                "mediaType":{"type":"string"}, "payload":{"type":"string"}, "capturedAt":{"type":"string"} },
+              "additionalProperties":false }
+            """,
+            version: "1.0.0");
+
+        // Contracts produced by business processes are stored in separate files.
+        // AppContext.BaseDirectory points to the output; Demo.csproj copies Schemas there.
+        schemas.Add("urn:schema:factory:bs1-operational-assessment:v1",
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "Schemas",
+                "bs1-operational-assessment-v1.schema.json"));
+
+        schemas.Add("urn:schema:factory:bs2-video-result:v1",
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "Schemas",
+                "bs2-video-result-v1.schema.json"));
+    });
 });
 
-// Añade únicamente el Worker aplicativo; contexto y dependencias MQTT ya están registrados.
-builder.Services.AddHostedService<SensorWorker>();
+// Registers BS1 as a singleton because it keeps no per-message state.
+builder.Services.AddSingleton<IBusinessServiceBs1, BusinessServiceBs1>();
+// Registers BS2 as a singleton because it temporarily retains chunks for each stream.
+builder.Services.AddSingleton<IBusinessServiceBs2, BusinessServiceBs2>();
 
-// Construye y ejecuta el Host hasta recibir la señal de parada.
+// Observes MQTT state changes and certificate-expiration warnings.
+builder.Services.AddHostedService<MqttLifecycleWorker>();
+// Consumes sensor1, runs BS1, publishes Bs1OperationalAssessment, and then acknowledges.
+builder.Services.AddHostedService<BusinessWorkerBs1>();
+// Consumes sensor2 with backpressure, runs BS2, and publishes the final result.
+builder.Services.AddHostedService<BusinessWorkerBs2>();
+// Simulates external sources after IMqttBus reaches the Ready state.
+builder.Services.AddHostedService<BusinessInputSimulatorWorker>();
+
+// Builds the container, connects MQTT through the library Hosted Service,
+// and keeps the process running until Ctrl+C or a Host shutdown signal.
 await builder.Build().RunAsync();

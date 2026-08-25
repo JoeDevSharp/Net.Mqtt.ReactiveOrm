@@ -15,7 +15,7 @@
     <RepositoryUrl>https://github.com/JoeDevSharp/Net.Mqtt.Infrastructure</RepositoryUrl>
     <PackageIcon>JoeDevSharp.MqttNet.ReactiveBinding.logo.png</PackageIcon>
     <RootNamespace>$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
-    <PackageTags>mqtt, mqttnet, reactive, orm, dotnet, csharp, mqtt-client, iot, mqtt-broker, observable, pubsub, mqtt-mapping, system-integration, mqtt-orm, mqtt-framework, typed-topics, serialization, json, mqtt-wrapper, mqtt-abstraction</PackageTags>
+    <PackageTags>mqtt, mqttnet, mqtt5, mqtt-3.1.1, dotnet, worker-service, messaging, infrastructure, cloud-events, cloudevents, mtls, tls, reactive, async-enumerable, typed-messaging, typed-topics, pubsub, event-driven, schema-validation, json-schema, contract-validation, persistent-sessions, reconnection, backpressure, acknowledgement, observability, iot</PackageTags>
     <Version>2.0.0</Version>
     <Copyright></Copyright>
     <PackageOutputPath>bin/nuget</PackageOutputPath>
