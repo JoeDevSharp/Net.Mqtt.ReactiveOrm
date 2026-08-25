@@ -11,20 +11,23 @@ namespace Net.Mqtt.ReactiveOrm.Bus;
 public sealed class InMemoryMqttBus : IMqttBus
 {
     private readonly ConcurrentDictionary<Guid, Subscriber> _subscribers = new();
-    private volatile ConnectionState _state;
+    private volatile ConnectionState _state = ConnectionState.Created;
     public ConnectionState State => _state;
+    public bool IsReady => State == ConnectionState.Ready;
+    public bool WasSessionRestored => false;
+    public event EventHandler<ConnectionStateChanged>? StateChanged;
 
     public Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _state = ConnectionState.Connected;
+        SetState(ConnectionState.Ready);
         return Task.CompletedTask;
     }
 
     public Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _state = ConnectionState.Disconnected;
+        SetState(ConnectionState.Stopped);
         return Task.CompletedTask;
     }
 
@@ -65,8 +68,15 @@ public sealed class InMemoryMqttBus : IMqttBus
     {
         foreach (var subscriber in _subscribers.Values) subscriber.Channel.Writer.TryComplete();
         _subscribers.Clear();
-        _state = ConnectionState.Disconnected;
+        SetState(ConnectionState.Stopped);
         return ValueTask.CompletedTask;
+    }
+
+    private void SetState(ConnectionState state)
+    {
+        var previous = _state;
+        _state = state;
+        if (previous != state) StateChanged?.Invoke(this, new(previous, state));
     }
 
     private sealed record Subscriber(string Filter, Channel<MqttDelivery> Channel);

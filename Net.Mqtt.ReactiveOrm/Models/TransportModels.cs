@@ -2,7 +2,8 @@ using Net.Mqtt.ReactiveOrm.Enums;
 
 namespace Net.Mqtt.ReactiveOrm.Models;
 
-public enum ConnectionState { Disconnected, Connecting, Connected, Disconnecting, Faulted }
+public enum ConnectionState { Created, Connecting, Connected, Subscribing, Ready, Reconnecting, Draining, Stopped, Faulted }
+public sealed record ConnectionStateChanged(ConnectionState Previous, ConnectionState Current, Exception? Error = null);
 public sealed record MqttSubscription(string TopicFilter, QoSLevel QoS = QoSLevel.AtMostOnce, int Capacity = 128);
 public sealed record MqttPublication(string Topic, ReadOnlyMemory<byte> Payload, QoSLevel QoS = QoSLevel.AtMostOnce, bool Retain = false);
 public sealed record MqttDelivery(

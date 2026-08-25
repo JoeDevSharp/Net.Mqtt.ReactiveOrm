@@ -1,173 +1,413 @@
-## 🧠 Framework – Net.Mqtt.ReactiveOrm
+# Net.Mqtt.ReactiveOrm
 
-**Net.Mqtt.ReactiveOrm** is a lightweight **Reactive Object-Relational Mapper (Reactive ORM)** for MQTT-based .NET applications. It transforms raw MQTT topics into **strongly typed, observable entities**, enabling developers to manipulate real-time data streams with familiar patterns such as LINQ, context objects, and declarative subscriptions.
+SDK MQTT tipado, asíncrono y reactivo para Worker Services .NET.
 
-Inspired by the architecture of **Entity Framework** (`DbContext`, `DbSet<T>`), this library introduces a structured, composable, and reactive layer over MQTT – turning your messaging layer into a type-safe, reactive data bus.
+Net.Mqtt.ReactiveOrm mantiene un modelo sencillo:
 
----
+```text
+Topic MQTT <-> TopicSet<T> <-> IAsyncEnumerable<T> / IObservable<T>
+```
 
-### 🔍 Key Features
+La versión 2 convierte ese modelo en una infraestructura apta para servicios de larga duración: transporte inyectable, API cancelable, backpressure, acknowledgements después del procesamiento, sesiones persistentes, reconexión automática, Last Will y ciclo de vida integrado con Generic Host.
 
-* **Entity Mapping via Attributes**: Bind MQTT topics directly to C# classes using `[Topic]` attributes.
-* **Reactive Subscriptions**: React to messages using `IObservable<T>`, `.Where(...)`, and `.Subscribe(...)`.
-* **Declarative Publishing**: Publish messages via `.Publish(entity)` instead of low-level topic handling.
-* **Context-based API**: Create an `MqttOrmContext` that acts like an EF `DbContext` for MQTT.
-* **LINQ-style Filtering**: Use `.Where()` and `.Select()` to declaratively transform and consume streams.
-* **Pluggable MQTT Integration**: Works over any implementation of `IMqttBus` (Mosquitto, HiveMQ, EMQX, etc.).
+## Estado actual
 
----
+La biblioteca incluye:
 
-### 🔧 Use Case Scenarios
+- `IMqttBus` como frontera pública del transporte.
+- `MqttNetBus` como implementación basada en MQTTnet.
+- `InMemoryMqttBus` para pruebas sin broker.
+- `MqttOrmContext` sin construcción oculta del cliente MQTT.
+- Registro explícito de topics mediante `TopicModelBuilder`.
+- Publicación y consumo completamente asíncronos y cancelables.
+- Consumo recomendado mediante `IAsyncEnumerable<MqttMessageContext<T>>`.
+- Compatibilidad con Reactive Extensions mediante `IObservable<T>`.
+- Canales acotados para aplicar backpressure.
+- Acknowledgement explícito después del procesamiento.
+- MQTT 5 como protocolo predeterminado y compatibilidad MQTT 3.1.1.
+- Sesiones persistentes y detección de sesiones restauradas.
+- Reconexión con backoff exponencial y jitter.
+- Restauración automática de suscripciones cuando el broker no restaura la sesión.
+- Máquina de estados observable y señal de readiness.
+- Last Will CloudEvent `UNAVAILABLE`.
+- Integración con Generic Host e inyección de dependencias.
 
-* **IoT Gateways**: Represent sensors and device data as live C# objects.
-* **Industrial Automation**: Monitor and control systems via strongly typed events.
-* **Edge Processing**: Perform reactive computations without glue code.
-* **Home Automation**: Handle device state changes cleanly and reactively.
+> La API 2.0 es incompatible con la API 1.x. Ya no existen `Publish()`, `Unsubscribe()`, constructores de contexto con host/puerto ni inicialización de propiedades mediante reflexión.
 
----
+## Requisitos
 
-### 🧱 Architecture Overview
+- .NET 10
+- Un broker compatible con MQTT 5 o MQTT 3.1.1
 
-| Component        | Description                                                                 |
-| ---------------- | --------------------------------------------------------------------------- |
-| `TopicSet<T>`    | Equivalent to `DbSet<T>` – manages publish/subscribe logic for a given type |
-| `MqttOrmContext` | Registers all topic-mapped entities and exposes their `TopicSet<T>`s        |
-| `IMqttBus`       | Abstraction layer over the MQTT client                                      |
-| `TopicAttribute` | Declares the topic-to-entity mapping using attributes                       |
+Para ejecutar la demo se puede iniciar Mosquitto con:
 
----
+```bash
+docker compose up -d
+```
 
-### 🤝 Philosophy
-
-Rather than treating MQTT as a loose transport protocol with JSON blobs and topic strings, **Net.Mqtt.ReactiveOrm** embraces **type safety**, **reactivity**, and **declarative design**.
-
-It enables you to **model your message flows as first-class domain entities**, subscribe with expressive LINQ queries, and **remove boilerplate MQTT plumbing** entirely.
-
-If Entity Framework brought structure to databases, **Net.Mqtt.ReactiveOrm does the same for MQTT**.
-
----
-
-### 📘 Developer Documentation – Net.Mqtt.ReactiveOrm
-
----
-
-#### ✅ 1. Introduction
-
-`Net.Mqtt.ReactiveOrm` offers a clean, modern alternative to traditional MQTT client libraries by treating messages as **live, observable entities**. It allows your application to **react, publish, and reason** about real-time events with minimal boilerplate.
-
----
-
-#### 🚀 2. Installation & Setup
+## Instalación
 
 ```bash
 dotnet add package Net.Mqtt.ReactiveOrm
 ```
 
-Or reference the source project directly for development or contribution.
+Durante el desarrollo también puede utilizarse una referencia directa al proyecto:
 
----
+```xml
+<ProjectReference Include="..\Net.Mqtt.ReactiveOrm\Net.Mqtt.ReactiveOrm.csproj" />
+```
 
-#### 🧩 3. Defining MQTT Entities
+## 1. Definir el contrato de datos
 
 ```csharp
-using Net.Mqtt.ReactiveOrm.Attributes;
-
-public class DHT230222_Modules
+public sealed class SensorReading
 {
-    public double Temperature { get; set; }
-    public double Humidity { get; set; }
-    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public required string SensorId { get; init; }
+    public double Temperature { get; init; }
+    public double Humidity { get; init; }
+    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
 }
 ```
 
----
+El codec predeterminado serializa los datos como JSON UTF-8. Puede sustituirse inyectando una implementación de `IMqttCodec` en el contexto.
 
-#### 🏗️ 4. Creating the MQTT Context
+## 2. Registrar explícitamente el modelo de topics
+
+El contexto no inspecciona ni modifica propiedades derivadas durante su construcción. Cada `TopicSet<T>` se resuelve desde un modelo explícito e inmutable:
 
 ```csharp
-public class MqttContext : MqttOrmContext
+using Net.Mqtt.ReactiveOrm;
+using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
+using Net.Mqtt.ReactiveOrm.Enums;
+using Net.Mqtt.ReactiveOrm.Models;
+
+public sealed class ApplicationMqttContext(
+    IMqttBus bus,
+    ITopicModel model) : MqttOrmContext(bus, model)
 {
-    [Topic("iot/devices/dht/modules/DHT230222_Modules/status")]
-    public TopicSet<DHT230222_Modules> DHT230222_Modules { get; }
+    public TopicSet<SensorReading> SensorReadings => Set<SensorReading>();
 
-    [Topic("iot/devices/dht/sensors/@/status")]
-    public TopicSet<DHT230222_Modules> EX4008_Sensor { get; }
+    public static TopicModel CreateModel() => new TopicModelBuilder()
+        .Add<SensorReading>(
+            nameof(SensorReadings),
+            "factory/sensors/SensorReading/events",
+            QoSLevel.AtLeastOnce)
+        .Build();
+}
+```
 
-    public MqttContext()
+El nombre usado en `TopicModelBuilder.Add<T>()` debe coincidir con el nombre de la propiedad. `Set<T>()` obtiene ese nombre mediante `CallerMemberName`, sin reflexión.
+
+La marca `@` de una plantilla se sustituye por el nombre del tipo:
+
+```csharp
+.Add<SensorReading>(
+    nameof(SensorReadings),
+    "factory/sensors/@/events")
+```
+
+## 3. Configurar MQTT y Generic Host
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using MQTTnet.Formatter;
+using Net.Mqtt.ReactiveOrm.Models;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddMqttReactiveOrm(options =>
+{
+    options.ProtocolVersion = MqttProtocolVersion.V500;
+    options.Server = "mosquitto.enterprise.svc.internal";
+    options.Port = 1883;
+    options.Transport = MqttTransport.Tcp;
+    options.ClientId = "enterprise-equipment-worker";
+
+    options.KeepAlive = TimeSpan.FromSeconds(30);
+    options.Timeout = TimeSpan.FromSeconds(10);
+    options.MaximumPacketSize = 1024 * 1024;
+    options.ReceiveMaximum = 32;
+
+    options.Session.CleanStart = false;
+    options.Session.Expiry = TimeSpan.FromHours(24);
+
+    options.Reconnect.UseExponentialBackoff(
+        initialDelay: TimeSpan.FromSeconds(1),
+        maximumDelay: TimeSpan.FromSeconds(30));
+    options.Reconnect.MaximumAttempts = 20;
+    options.Reconnect.MaximumDuration = TimeSpan.FromMinutes(10);
+
+    options.LastWill.MessageExpiry = TimeSpan.FromMinutes(5);
+    options.LastWill.UseServiceUnavailableCloudEvent();
+});
+
+builder.Services.AddSingleton<ITopicModel>(
+    _ => ApplicationMqttContext.CreateModel());
+builder.Services.AddSingleton<ApplicationMqttContext>();
+builder.Services.AddHostedService<SensorWorker>();
+
+await builder.Build().RunAsync();
+```
+
+`AddMqttReactiveOrm` registra un único `IMqttBus` compartido. Un servicio hospedado conecta el bus durante el arranque y realiza un cierre ordenado cuando el Host recibe su señal de parada.
+
+### WebSocket
+
+```csharp
+options.Transport = MqttTransport.WebSocket;
+options.WebSocketUri = "ws://localhost:9001/mqtt";
+```
+
+### MQTT 3.1.1
+
+```csharp
+options.ProtocolVersion = MqttProtocolVersion.V311;
+```
+
+En modo MQTT 3.1.1 la biblioteca usa `CleanSession = false`. En MQTT 5 usa `CleanStart` y `Session.Expiry`.
+
+## 4. Consumir con cancelación, backpressure y acknowledgement
+
+`ReadAllAsync` es la API recomendada para Workers:
+
+```csharp
+using Microsoft.Extensions.Hosting;
+using Net.Mqtt.ReactiveOrm.Models;
+
+public sealed class SensorWorker(
+    ApplicationMqttContext context) : BackgroundService
+{
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
     {
-        DHT230222_Modules = Set<DHT230222_Modules>();
-        EX4008_Sensor = Set<DHT230222_Modules>("EX4008"); // Named parameter replacement
+        var options = new SubscriptionOptions
+        {
+            Capacity = 64
+        };
+
+        await foreach (var message in context.SensorReadings.ReadAllAsync(
+            options,
+            stoppingToken))
+        {
+            await ProcessAsync(message.Data, stoppingToken);
+
+            // Solo confirmar después de que el procesamiento termine correctamente.
+            await message.AcknowledgeAsync(stoppingToken);
+        }
+    }
+
+    private static Task ProcessAsync(
+        SensorReading reading,
+        CancellationToken cancellationToken)
+    {
+        Console.WriteLine(
+            $"{reading.SensorId}: {reading.Temperature} °C");
+        return Task.CompletedTask;
     }
 }
 ```
 
----
+`MqttMessageContext<T>` expone:
 
-#### 👂 5. Subscribing to Messages
+- `Data`: objeto deserializado.
+- `Topic`: topic MQTT real que recibió el mensaje.
+- `QoS`: nivel de entrega.
+- `Retain`: indica si el mensaje fue entregado como retained.
+- `IsAcknowledged`: estado local del acknowledgement.
+- `AcknowledgeAsync()`: confirmación idempotente.
+
+La capacidad de `SubscriptionOptions` crea un canal acotado. Cuando el consumidor no puede mantener el ritmo, la lectura MQTT espera en lugar de acumular mensajes indefinidamente.
+
+## 5. Publicar
 
 ```csharp
-_context.DHT230222_Modules
-    .Where(x => x.Temperature > 25)
-    .Subscribe(x =>
+await context.SensorReadings.PublishAsync(
+    new SensorReading
     {
-        Console.WriteLine($"Warning: High temp = {x.Temperature}");
-    });
+        SensorId = "sensor-42",
+        Temperature = 23.7,
+        Humidity = 41.2
+    },
+    CloudEventPublishOptions.Default,
+    stoppingToken);
 ```
 
----
-
-#### 📤 6. Publishing Messages
+Es posible sobrescribir QoS y retained para una publicación concreta:
 
 ```csharp
-await _context.DHT230222_Modules.Publish(new DHT230222_Modules
-{
-    Temperature = 21.4,
-    Humidity = 44.5
-});
+await context.SensorReadings.PublishAsync(
+    reading,
+    new CloudEventPublishOptions
+    {
+        QoS = QoSLevel.ExactlyOnce,
+        Retain = false
+    },
+    stoppingToken);
 ```
 
----
+`PublishAsync` propaga la cancelación y lanza una excepción si MQTTnet informa que la publicación no fue aceptada.
 
-#### 🧪 7. Full Console Example
+## 6. Compatibilidad reactiva
+
+`TopicSet<T>` continúa implementando `IObservable<T>`:
 
 ```csharp
-static void Main(string[] args)
+using System.Reactive.Linq;
+
+using var subscription = context.SensorReadings
+    .Where(reading => reading.Temperature > 25)
+    .Subscribe(reading =>
+        Console.WriteLine($"Alerta: {reading.Temperature} °C"));
+```
+
+La suscripción se cancela al liberar el `IDisposable`. Para lógica asíncrona, control de backpressure y acknowledgement explícito debe preferirse `ReadAllAsync`.
+
+## 7. Ciclo de vida y readiness
+
+`IMqttBus.State` recorre los siguientes estados:
+
+```text
+Created
+  -> Connecting
+  -> Connected
+  -> Subscribing
+  -> Ready
+  -> Reconnecting
+  -> Draining
+  -> Stopped
+```
+
+`Faulted` indica que la conexión inicial falló o que se agotó la política de reconexión.
+
+```csharp
+bus.StateChanged += (_, change) =>
 {
-    var context = new MqttContext();
+    Console.WriteLine(
+        $"MQTT: {change.Previous} -> {change.Current}");
+};
 
-    context.DHT230222_Modules.Subscribe(m =>
-    {
-        Console.WriteLine($"Temp = {m.Temperature}, Humidity = {m.Humidity}");
-    });
-
-    context.DHT230222_Modules.Publish(new DHT230222_Modules
-    {
-        Temperature = 18.0,
-        Humidity = 45.0
-    });
-
-    Console.ReadLine();
+if (bus.IsReady)
+{
+    // El Worker tiene conexión y sus suscripciones están restauradas.
 }
 ```
 
----
+La readiness se retira al abandonar `Ready`. `WasSessionRestored` indica si el broker devolvió una sesión existente en el último CONNACK.
 
-#### 🛠️ 8. Best Practices
+Después de una reconexión:
 
-* Always wait for connection establishment before publishing.
-* Filter early using `.Where()` to reduce unnecessary processing.
-* Avoid blocking inside `.Subscribe()`; use async patterns if needed.
-* Use wildcard substitution (`@`) to support dynamic topic segments.
+- Si el broker restauró la sesión, no se duplican las suscripciones.
+- Si no la restauró, `MqttNetBus` vuelve a suscribir todos los filtros activos.
 
----
+## 8. Last Will and Testament
 
-#### ❓ 9. FAQ
+```csharp
+options.LastWill.MessageExpiry = TimeSpan.FromMinutes(5);
+options.LastWill.UseServiceUnavailableCloudEvent(
+    "services/equipment-worker/availability");
+```
 
-> **Q: Can I use MQTT wildcards like `+` and `#`?**
-> Yes, enable `AllowWildcards = true` in the `[Topic]` attribute.
+Ante una desconexión abrupta, el broker publica un CloudEvent con estado `UNAVAILABLE`. De forma predeterminada el mensaje es retained. En un cierre normal, la biblioteca publica explícitamente el mismo estado antes de desconectarse.
 
-> **Q: What is `Set<T>()`?**
-> Equivalent to `DbContext.Set<T>()`, it returns a `TopicSet<T>` mapped to a topic.
+Si no se especifica un topic, se utiliza:
 
-> **Q: Is it compatible with any MQTT broker?**
-> Yes. As long as the broker supports MQTT 3.1.1 or 5.0.
+```text
+services/{ClientId}/availability
+```
+
+## 9. Pruebas sin broker
+
+`InMemoryMqttBus` implementa el mismo contrato que `MqttNetBus`:
+
+```csharp
+await using var bus = new InMemoryMqttBus();
+var model = new TopicModelBuilder()
+    .Add<SensorReading>(
+        nameof(ApplicationMqttContext.SensorReadings),
+        "tests/sensors/events")
+    .Build();
+
+var context = new ApplicationMqttContext(bus, model);
+using var cancellation = new CancellationTokenSource();
+
+await using var reader = context.SensorReadings.ReadAllAsync(
+    SubscriptionOptions.Default,
+    cancellation.Token).GetAsyncEnumerator(cancellation.Token);
+
+// MoveNextAsync inicia y registra la suscripción antes de publicar.
+var nextMessage = reader.MoveNextAsync().AsTask();
+
+await context.SensorReadings.PublishAsync(
+    new SensorReading
+    {
+        SensorId = "test-sensor",
+        Temperature = 20
+    },
+    CloudEventPublishOptions.Default,
+    cancellation.Token);
+
+if (!await nextMessage)
+    throw new InvalidOperationException("La suscripción terminó sin recibir datos.");
+
+await reader.Current.AcknowledgeAsync(cancellation.Token);
+var received = reader.Current.Data;
+```
+
+El bus en memoria respeta filtros con comodines y canales acotados, por lo que permite probar el flujo tipado y la cancelación sin iniciar Mosquitto.
+
+## 10. Uso directo sin Generic Host
+
+Aunque Generic Host es la opción recomendada, también puede controlarse el transporte manualmente:
+
+```csharp
+var options = new MqttReactiveOrmOptions
+{
+    ClientId = "standalone-client",
+    Server = "localhost",
+    Port = 1883
+};
+
+await using var bus = new MqttNetBus(options);
+await bus.ConnectAsync(cancellationToken);
+
+// Publicación y consumo...
+
+await bus.DisconnectAsync(cancellationToken);
+```
+
+## Buenas prácticas
+
+- Utilizar un `ClientId` estable y único por instancia de servicio.
+- Propagar siempre el `CancellationToken` del Host.
+- Confirmar el mensaje solamente después de completar el efecto aplicativo.
+- Mantener el procesamiento idempotente: MQTT puede entregar duplicados.
+- Elegir una capacidad de suscripción coherente con la carga y memoria disponibles.
+- No usar retained para flujos de eventos; reservarlo para estados o snapshots.
+- No bloquear tareas asíncronas mediante `.Wait()` o `.GetAwaiter().GetResult()`.
+- Supervisar `IsReady` y `StateChanged` para health checks y observabilidad.
+
+## Demo
+
+La carpeta [Demo](Demo) contiene un Worker completo con:
+
+- configuración MQTT 5;
+- sesión persistente;
+- reconexión exponencial;
+- LWT CloudEvent;
+- contexto y modelo registrados mediante DI;
+- consumo cancelable con backpressure;
+- acknowledgement posterior al procesamiento;
+- publicación de un mensaje de ejemplo.
+
+Ejecutar:
+
+```bash
+dotnet run --project Demo/Demo.csproj
+```
+
+Detener con `Ctrl+C` para comprobar el cierre ordenado.
+
+## Alcance de esta versión
+
+Esta versión implementa las extensiones de transporte inyectable, API asíncrona y ciclo de vida MQTT. Las capacidades de CloudEvents para todos los mensajes de aplicación, contratos y esquemas, inbox/outbox, retry/DLQ, protocolo de capacidades y OpenTelemetry forman parte de evoluciones posteriores.

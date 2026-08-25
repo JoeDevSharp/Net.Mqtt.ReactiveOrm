@@ -11,4 +11,8 @@
     <ProjectReference Include="..\Net.Mqtt.ReactiveOrm\Net.Mqtt.ReactiveOrm.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>
