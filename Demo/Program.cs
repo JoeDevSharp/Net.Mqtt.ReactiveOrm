@@ -10,6 +10,10 @@ using Microsoft.Extensions.Hosting;
 using MQTTnet.Formatter;
 // Importa las opciones y contratos de configuración de Net.Mqtt.ReactiveOrm.
 using Net.Mqtt.ReactiveOrm.Models;
+// Importa el registro de contratos y los resolutores de JSON Schema.
+using Net.Mqtt.ReactiveOrm.Contracts;
+// Importa el contrato de datos utilizado para registrar su versión gobernada.
+using Demo.Entities;
 
 // Crea el constructor del Host usando los argumentos recibidos por la aplicación.
 // El Host también configura logging, configuración y gestión de señales como Ctrl+C.
@@ -51,6 +55,35 @@ builder.Services.AddMqttReactiveOrm(options =>
     options.LastWill.UseServiceUnavailableCloudEvent();
 // Finaliza la configuración y el registro de Net.Mqtt.ReactiveOrm.
 });
+
+// Mantiene el JSON Schema local en esta demo; en producción puede utilizarse FileJsonSchemaResolver o HttpJsonSchemaResolver.
+var schemas = new InMemoryJsonSchemaResolver()
+    .Add(
+        new Uri("urn:schema:factory:sensor-reading:v1"),
+        """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["temperature", "humidity", "timestamp"],
+          "properties": {
+            "temperature": { "type": "number", "minimum": -273.15 },
+            "humidity": { "type": "number", "minimum": 0, "maximum": 100 },
+            "timestamp": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+        """,
+        version: "1.0.0");
+
+// Vincula el type CloudEvents, dataschema, versión y tipo C# generado del contrato.
+builder.Services.AddMqttEventContracts(
+    contracts => contracts.Add<DHT230222_Modules>(
+        eventType: "com.factory.sensor.reading.v1",
+        dataSchema: new Uri("urn:schema:factory:sensor-reading:v1"),
+        version: new Version(1, 0, 0),
+        maximumDataSize: 16 * 1024,
+        forbiddenFields: ["password", "secret"]),
+    schemas);
 
 // Registra el mapa inmutable que relaciona cada TopicSet tipado con su topic MQTT.
 builder.Services.AddSingleton<ITopicModel>(_ => MqttContext.CreateModel());

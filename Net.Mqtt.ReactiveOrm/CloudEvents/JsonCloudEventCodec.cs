@@ -1,13 +1,20 @@
 using System.Text.Json;
+using Net.Mqtt.ReactiveOrm.Contracts;
 
 namespace Net.Mqtt.ReactiveOrm.CloudEvents;
 
 public sealed class JsonCloudEventCodec(JsonSerializerOptions? options = null) : ICloudEventCodec
 {
     public const string StructuredContentType = "application/cloudevents+json; charset=utf-8";
-    private readonly JsonSerializerOptions _options = options ?? new(JsonSerializerDefaults.Web);
+    private readonly JsonSerializerOptions _options = options ?? MqttJsonProfile.Create();
 
-    public ReadOnlyMemory<byte> Serialize<TData>(CloudEventMessage<TData> message)
+    public ReadOnlyMemory<byte> SerializeData<TData>(TData data) =>
+        MqttJsonProfile.Serialize(data, _options);
+
+    public ReadOnlyMemory<byte> Serialize<TData>(CloudEventMessage<TData> message) =>
+        Serialize(message, SerializeData(message.Data));
+
+    public ReadOnlyMemory<byte> Serialize<TData>(CloudEventMessage<TData> message, ReadOnlyMemory<byte> serializedData)
     {
         Validate(message);
         using var stream = new MemoryStream();
@@ -24,13 +31,23 @@ public sealed class JsonCloudEventCodec(JsonSerializerOptions? options = null) :
             if (message.DataSchema is { } schema) writer.WriteString("dataschema", schema.OriginalString);
             WriteExtensions(writer, message.Extensions);
             writer.WritePropertyName("data");
-            JsonSerializer.Serialize(writer, message.Data, _options);
+            writer.WriteRawValue(serializedData.Span, skipInputValidation: false);
             writer.WriteEndObject();
         }
         return stream.ToArray();
     }
 
     public CloudEventMessage<TData> Deserialize<TData>(ReadOnlyMemory<byte> payload, string? contentType)
+    {
+        var envelope = ReadEnvelope(payload, contentType);
+        var data = JsonSerializer.Deserialize<TData>(envelope.Data.Span, _options)
+            ?? throw new InvalidDataException($"CloudEvent data cannot be deserialized as {typeof(TData).Name}.");
+        var message = envelope.WithData(data);
+        Validate(message);
+        return message;
+    }
+
+    public CloudEventEnvelope ReadEnvelope(ReadOnlyMemory<byte> payload, string? contentType)
     {
         ValidateContentType(contentType);
         JsonDocument document;
@@ -41,24 +58,14 @@ public sealed class JsonCloudEventCodec(JsonSerializerOptions? options = null) :
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object) throw new InvalidDataException("A structured CloudEvent must be a JSON object.");
             EnsureUniqueAttributes(root);
-            var dataElement = Required(root, "data");
-            var data = dataElement.Deserialize<TData>(_options)
-                ?? throw new InvalidDataException($"CloudEvent data cannot be deserialized as {typeof(TData).Name}.");
-            var message = new CloudEventMessage<TData>
-            {
-                SpecVersion = RequiredString(root, "specversion"),
-                Id = RequiredString(root, "id"),
-                Source = RequiredUri(root, "source"),
-                Type = RequiredString(root, "type"),
-                Subject = OptionalString(root, "subject"),
-                Time = OptionalDateTimeOffset(root, "time"),
-                DataContentType = RequiredString(root, "datacontenttype"),
-                DataSchema = OptionalUri(root, "dataschema"),
-                Data = data,
-                Extensions = ReadExtensions(root)
-            };
-            Validate(message);
-            return message;
+            var specVersion = RequiredString(root, "specversion");
+            if (specVersion != "1.0") throw new InvalidDataException("Only CloudEvents specversion 1.0 is supported.");
+            var source = RequiredUri(root, "source");
+            var type = RequiredString(root, "type");
+            var dataContentType = RequiredString(root, "datacontenttype");
+            var data = System.Text.Encoding.UTF8.GetBytes(Required(root, "data").GetRawText());
+            return new(specVersion, RequiredString(root, "id"), source, type, OptionalString(root, "subject"),
+                OptionalDateTimeOffset(root, "time"), dataContentType, OptionalUri(root, "dataschema"), ReadExtensions(root), data);
         }
     }
 

@@ -21,6 +21,7 @@ La biblioteca incluye:
 - Registro explícito de topics mediante `TopicModelBuilder`.
 - Publicación y consumo completamente asíncronos y cancelables.
 - CloudEvents 1.0 tipados en structured content mode JSON para todos los mensajes.
+- Registro versionado de contratos C# y validación JSON Schema antes de publicar y consumir.
 - Consumo recomendado mediante `IAsyncEnumerable<MqttMessageContext<T>>`.
 - Compatibilidad con Reactive Extensions mediante `IObservable<T>`.
 - Canales acotados para aplicar backpressure.
@@ -83,10 +84,18 @@ using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using Net.Mqtt.ReactiveOrm.Enums;
 using Net.Mqtt.ReactiveOrm.Models;
 using Net.Mqtt.ReactiveOrm.CloudEvents;
+using Net.Mqtt.ReactiveOrm.Contracts;
 
 public sealed class ApplicationMqttContext(
     IMqttBus bus,
-    ITopicModel model) : MqttOrmContext(bus, model)
+    ITopicModel model,
+    ICloudEventFactory cloudEventFactory,
+    ICloudEventCodec cloudEventCodec,
+    IEventContractRegistry contractRegistry,
+    IEventDataValidator dataValidator)
+    : MqttOrmContext(
+        bus, model, cloudEventFactory, cloudEventCodec,
+        contractRegistry, dataValidator)
 {
     public TopicSet<SensorReading> SensorReadings => Set<SensorReading>();
 
@@ -470,6 +479,8 @@ La carpeta [Demo](Demo) contiene un Worker completo con:
 - sesión persistente;
 - reconexión exponencial;
 - LWT CloudEvent;
+- contrato C# versionado y JSON Schema local;
+- validación antes de publicar y antes de exponer `TData`;
 - contexto y modelo registrados mediante DI;
 - consumo cancelable con backpressure;
 - acknowledgement posterior al procesamiento;
@@ -587,6 +598,142 @@ bus.CertificateExpiring += (_, certificate) =>
 
 Durante una rotación, `IsReady` deja de ser verdadero, la conexión pasa por `Draining` y solo vuelve a `Ready` después de autenticar el nuevo certificado y restaurar las suscripciones.
 
+## Metamodelo y validación de contratos
+
+Cada tipo de evento debe vincular tres representaciones de la misma versión contractual:
+
+```text
+CloudEvent type <-> dataschema <-> tipo C#
+```
+
+El registro se configura durante el arranque:
+
+```csharp
+using Net.Mqtt.ReactiveOrm.Contracts;
+
+var schemas = new InMemoryJsonSchemaResolver()
+    .Add(
+        new Uri("urn:schema:factory:sensor-reading:v1"),
+        """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["sensorId", "temperature", "timestamp"],
+          "properties": {
+            "sensorId": { "type": "string", "minLength": 1 },
+            "temperature": { "type": "number", "minimum": -273.15 },
+            "timestamp": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+        """,
+        version: "1.0.0");
+
+builder.Services.AddMqttEventContracts(
+    contracts => contracts.Add<SensorReading>(
+        eventType: "com.factory.sensor.reading.v1",
+        dataSchema: new Uri("urn:schema:factory:sensor-reading:v1"),
+        version: new Version(1, 0, 0),
+        compatibility: ContractCompatibility.Exact,
+        maximumDataSize: 16 * 1024,
+        forbiddenFields: ["password", "secret"]),
+    schemas,
+    schemaCacheCapacity: 64);
+```
+
+Antes de publicar y después de recibir, pero antes de deserializar `TData`, se comprueba:
+
+- que el envelope CloudEvents sea válido;
+- que `type` esté registrado;
+- que `dataschema` esté autorizado para ese tipo;
+- que el contrato corresponda al tipo C# solicitado;
+- que el tamaño no supere `MaximumDataSize`;
+- que no aparezcan campos prohibidos, incluso dentro de objetos anidados;
+- que el JSON cumpla el esquema resuelto.
+
+Los errores `UnknownEventContractException`, `ContractMismatchException` y `EventDataValidationException` implementan `INonRetryableError` y exponen `IsRetryable = false`. Una futura política DLQ puede clasificarlos sin reintentar un mensaje que nunca será válido.
+
+### Contratos generados desde paquetes NuGet
+
+Los tipos producidos por el metamodelo pueden declarar sus metadatos directamente:
+
+```csharp
+[EventContract(
+    "com.factory.sensor.reading.v1",
+    "urn:schema:factory:sensor-reading:v1",
+    "1.0.0")]
+public sealed partial class SensorReading
+{
+    // Código generado por el paquete contractual.
+}
+```
+
+El assembly del paquete se registra sin buscar contratos fuera del conjunto indicado:
+
+```csharp
+var registry = new EventContractRegistryBuilder()
+    .AddGeneratedContracts(typeof(SensorReading).Assembly)
+    .Build();
+```
+
+También se puede llamar a `Add<TData>()` desde una extensión DI incluida en el propio paquete NuGet generado, evitando reflexión durante el consumo.
+
+### Resolución y caché de esquemas
+
+La biblioteca proporciona:
+
+- `InMemoryJsonSchemaResolver` para esquemas embebidos o pruebas;
+- `FileJsonSchemaResolver` para mappings URI → archivo local;
+- `HttpJsonSchemaResolver` para repositorios HTTP/HTTPS;
+- `CompositeJsonSchemaResolver` para encadenar resolución local y remota;
+- `CachingJsonSchemaResolver` con capacidad LRU, versión del recurso y refresco temporal.
+
+Ejemplo local con fallback remoto:
+
+```csharp
+var resolver = new CompositeJsonSchemaResolver(
+    localResolver,
+    new HttpJsonSchemaResolver(httpClient));
+
+builder.Services.AddMqttEventContracts(
+    ConfigureGeneratedContracts,
+    resolver,
+    schemaCacheCapacity: 128);
+```
+
+El validador soporta las restricciones comunes utilizadas por los contratos generados: `type`, `required`, `properties`, `additionalProperties`, `items`, `enum`, `minLength`, `maxLength`, `minimum`, `maximum` y referencias locales `#/$defs/...`.
+
+### Compatibilidad de versiones
+
+Las políticas disponibles son:
+
+- `Exact`: solo el `dataschema` registrado;
+- `SameMajor`: acepta esquemas con la misma versión mayor;
+- `BackwardCompatible`: permite al consumidor actual leer versiones anteriores de la misma major;
+- `CompatibleSchemas`: lista explícita de URIs autorizadas, recomendada cuando la versión no forma parte de la URI.
+
+La identidad del contrato no se deduce únicamente del nombre C#: siempre se validan conjuntamente `type`, `dataschema`, versión y `Type` CLR.
+
+### Perfil JSON y Protobuf
+
+`MqttJsonProfile` aplica camelCase, números estrictos, propiedades desconocidas rechazadas, valores no omitidos y salida sin indentación. Publicación, validación y deserialización utilizan la misma representación determinista.
+
+Cuando un contrato generado utiliza Protobuf, debe registrar una proyección JSON explícita:
+
+```csharp
+var mapper = new DelegateContractJsonMapper<GeneratedSensorReading>(
+    message => protobufJsonFormatter.FormatUtf8(message),
+    json => protobufJsonParser.Parse<GeneratedSensorReading>(json));
+
+contracts.Add<GeneratedSensorReading>(
+    eventType,
+    dataSchema,
+    new Version(1, 0, 0),
+    jsonMapper: mapper);
+```
+
+No se realiza ninguna conversión Protobuf implícita: el JSON validado y el mapping deben pertenecer al mismo paquete contractual.
+
 ## Alcance de esta versión
 
-Esta versión implementa transporte inyectable, API asíncrona, ciclo de vida MQTT, seguridad TLS/mTLS y CloudEvents 1.0 tipados para todos los mensajes. La validación avanzada de contratos y esquemas, inbox/outbox, retry/DLQ, protocolo de capacidades y OpenTelemetry forman parte de evoluciones posteriores.
+Esta versión implementa transporte inyectable, API asíncrona, ciclo de vida MQTT, seguridad TLS/mTLS, CloudEvents 1.0 tipados y validación de contratos JSON Schema. Inbox/outbox, retry/DLQ, protocolo de capacidades y OpenTelemetry forman parte de evoluciones posteriores.

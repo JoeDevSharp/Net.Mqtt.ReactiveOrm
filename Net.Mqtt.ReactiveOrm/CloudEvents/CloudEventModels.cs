@@ -19,6 +19,26 @@ public sealed record CloudEventMessage<TData>
 
 public sealed record CloudEventIdentity(Uri Source, string Id);
 
+public sealed record CloudEventEnvelope(
+    string SpecVersion,
+    string Id,
+    Uri Source,
+    string Type,
+    string? Subject,
+    DateTimeOffset? Time,
+    string DataContentType,
+    Uri? DataSchema,
+    CloudEventExtensions Extensions,
+    ReadOnlyMemory<byte> Data)
+{
+    public CloudEventIdentity Identity => new(Source, Id);
+    public CloudEventMessage<TData> WithData<TData>(TData data) => new()
+    {
+        SpecVersion = SpecVersion, Id = Id, Source = Source, Type = Type, Subject = Subject, Time = Time,
+        DataContentType = DataContentType, DataSchema = DataSchema, Extensions = Extensions, Data = data
+    };
+}
+
 public sealed record CloudEventExtensions
 {
     public string? CorrelationId { get; init; }
@@ -54,5 +74,8 @@ public interface ICloudEventFactory
 public interface ICloudEventCodec
 {
     ReadOnlyMemory<byte> Serialize<TData>(CloudEventMessage<TData> message);
+    ReadOnlyMemory<byte> Serialize<TData>(CloudEventMessage<TData> message, ReadOnlyMemory<byte> serializedData);
+    ReadOnlyMemory<byte> SerializeData<TData>(TData data);
+    CloudEventEnvelope ReadEnvelope(ReadOnlyMemory<byte> payload, string? contentType);
     CloudEventMessage<TData> Deserialize<TData>(ReadOnlyMemory<byte> payload, string? contentType);
 }
