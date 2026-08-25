@@ -8,6 +8,14 @@ using System.Runtime.CompilerServices;
 
 namespace Net.Mqtt.ReactiveOrm;
 
+public sealed record MqttContextDependencies(
+    IMqttBus Bus,
+    ITopicModel Topics,
+    ICloudEventFactory CloudEventFactory,
+    ICloudEventCodec CloudEventCodec,
+    IEventContractRegistry Contracts,
+    IEventDataValidator Validator);
+
 public abstract class MqttOrmContext
 {
     private readonly IMqttBus _bus;
@@ -17,6 +25,12 @@ public abstract class MqttOrmContext
     private readonly IEventContractRegistry? _contractRegistry;
     private readonly IEventDataValidator? _dataValidator;
     private readonly ConcurrentDictionary<(Type, string), object> _sets = new();
+
+    protected MqttOrmContext(MqttContextDependencies dependencies)
+        : this(dependencies.Bus, dependencies.Topics, dependencies.CloudEventFactory,
+            dependencies.CloudEventCodec, dependencies.Contracts, dependencies.Validator)
+    {
+    }
 
     protected MqttOrmContext(IMqttBus bus, ITopicModel model,
         ICloudEventFactory? cloudEventFactory = null, ICloudEventCodec? cloudEventCodec = null,

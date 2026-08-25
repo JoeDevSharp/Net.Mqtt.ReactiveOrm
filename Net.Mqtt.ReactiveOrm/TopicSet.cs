@@ -18,7 +18,8 @@ public sealed class TopicSet<T> : ITopicSet<T>
     private readonly IEventDataValidator _dataValidator;
     public IMqttBus MqttBus { get; }
     public TopicDefinition Definition { get; }
-    public string Template => Definition.Template;
+    [Obsolete("Use Definition.PublishTopic or Definition.SubscribeFilter.")]
+    public string Template => Definition.SubscribeFilter;
 
     public TopicSet(IMqttBus mqttBus, ICloudEventFactory cloudEventFactory, ICloudEventCodec cloudEventCodec,
         IEventContractRegistry contractRegistry, IEventDataValidator dataValidator, TopicDefinition definition)
@@ -44,7 +45,7 @@ public sealed class TopicSet<T> : ITopicSet<T>
         var cloudEvent = _cloudEventFactory.Create(data, descriptor, options.Context);
         var serializedData = contract.JsonMapper?.Serialize(data!, typeof(T)) ?? _cloudEventCodec.SerializeData(data);
         await ValidateDataAsync(contract, serializedData, cancellationToken).ConfigureAwait(false);
-        var publication = new MqttPublication(Definition.Resolve<T>(), _cloudEventCodec.Serialize(cloudEvent, serializedData),
+        var publication = new MqttPublication(Definition.ResolvePublishTopic(data), _cloudEventCodec.Serialize(cloudEvent, serializedData),
             options.QoS ?? Definition.QoS, options.Retain ?? Definition.Retain, JsonCloudEventCodec.StructuredContentType);
         var result = await MqttBus.PublishAsync(publication, cancellationToken).ConfigureAwait(false);
         if (!result.IsSuccess) throw new InvalidOperationException(result.Reason ?? "The MQTT publication failed.");
@@ -65,10 +66,19 @@ public sealed class TopicSet<T> : ITopicSet<T>
     {
         ArgumentNullException.ThrowIfNull(options);
         if (options.Capacity <= 0) throw new ArgumentOutOfRangeException(nameof(options), "Capacity must be greater than zero.");
-        var subscription = new MqttSubscription(Definition.Resolve<T>(), options.QoS ?? Definition.QoS, options.Capacity);
+        var subscription = new MqttSubscription(Definition.SubscribeFilter, options.QoS ?? Definition.QoS, options.Capacity);
         await foreach (var delivery in MqttBus.SubscribeAsync(subscription, cancellationToken).ConfigureAwait(false))
         {
-            var envelope = _cloudEventCodec.ReadEnvelope(delivery.Payload, delivery.ContentType);
+            if (!Definition.MatchesSubscription<T>(delivery.Topic)) continue;
+            CloudEventEnvelope envelope;
+            try
+            {
+                envelope = _cloudEventCodec.ReadEnvelope(delivery.Payload, delivery.ContentType);
+            }
+            catch (InvalidDataException error)
+            {
+                throw new InvalidMqttCloudEventException(delivery.Topic, delivery.ContentType, error);
+            }
             var contract = _contractRegistry.GetByEventType(envelope.Type);
             EventContractGuard.EnsureCompatible(contract, envelope.Type, envelope.DataSchema, typeof(T));
             await ValidateDataAsync(contract, envelope.Data, cancellationToken).ConfigureAwait(false);
@@ -78,6 +88,9 @@ public sealed class TopicSet<T> : ITopicSet<T>
             yield return new MqttMessageContext<T>(cloudEvent, delivery);
         }
     }
+
+    public IAsyncEnumerable<MqttMessageContext<T>> ReadAllAsync(CancellationToken cancellationToken = default) =>
+        ReadAllAsync(SubscriptionOptions.Default, cancellationToken);
 
     private async ValueTask ValidateDataAsync(EventContractDescriptor contract, ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
     {

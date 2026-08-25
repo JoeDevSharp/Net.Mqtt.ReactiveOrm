@@ -96,8 +96,10 @@ public sealed class EventContractRegistryBuilder
 }
 
 public interface INonRetryableError { bool IsRetryable { get; } }
-public abstract class ContractValidationException(string message) : Exception(message), INonRetryableError
+public abstract class ContractValidationException : Exception, INonRetryableError
 {
+    protected ContractValidationException(string message) : base(message) { }
+    protected ContractValidationException(string message, Exception inner) : base(message, inner) { }
     public bool IsRetryable => false;
 }
 public sealed class UnknownEventContractException(string message) : ContractValidationException(message);

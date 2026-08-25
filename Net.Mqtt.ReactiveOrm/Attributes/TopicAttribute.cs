@@ -9,6 +9,7 @@ namespace Net.Mqtt.ReactiveOrm.Attributes
     /// la retención y si se permiten comodines para suscripciones.
     /// </summary>
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Class, Inherited = true, AllowMultiple = false)]
+    [Obsolete("Use MqttTopicAttribute with separate PublishTopic and SubscribeFilter.")]
     public class TopicAttribute : Attribute
     {
         /// <summary>

@@ -5,11 +5,47 @@ using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using Net.Mqtt.ReactiveOrm.Models;
 using Net.Mqtt.ReactiveOrm.CloudEvents;
 using Net.Mqtt.ReactiveOrm.Contracts;
+using Net.Mqtt.ReactiveOrm;
+using Net.Mqtt.ReactiveOrm.Hosting;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
 public static class MqttReactiveOrmServiceCollectionExtensions
 {
+    public static IServiceCollection AddMqttReactiveOrm<TContext>(this IServiceCollection services,
+        Action<MqttReactiveOrmBuilder<TContext>> configure)
+        where TContext : MqttOrmContext
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configure);
+        var builder = new MqttReactiveOrmBuilder<TContext>(services);
+        configure(builder);
+        builder.Register();
+        return services;
+    }
+
+    public static IServiceCollection AddMqttTopicModel<TContext>(this IServiceCollection services,
+        Action<MqttTopicPolicyOptions> configurePolicy)
+        where TContext : MqttOrmContext
+    {
+        ArgumentNullException.ThrowIfNull(configurePolicy);
+        var options = new MqttTopicPolicyOptions
+        {
+            ModuleNamespace = string.Empty,
+            CloudEventSource = new Uri("urn:unset")
+        };
+        configurePolicy(options);
+        services.AddSingleton<ITopicModel>(provider =>
+        {
+            var contracts = provider.GetRequiredService<IEventContractRegistry>();
+            return new TopicModelBuilder(new MqttTopicPolicy(options))
+                .AddAttributedContext<TContext>(contracts, options.CloudEventSource,
+                    resolverType => provider.GetRequiredService(resolverType))
+                .Build();
+        });
+        return services;
+    }
+
     public static IServiceCollection AddMqttEventContracts(this IServiceCollection services,
         Action<EventContractRegistryBuilder> configureContracts, IJsonSchemaResolver schemaResolver, int schemaCacheCapacity = 64)
     {

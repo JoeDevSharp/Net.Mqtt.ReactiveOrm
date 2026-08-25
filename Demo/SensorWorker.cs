@@ -57,8 +57,7 @@ public sealed class SensorWorker(MqttContext context, IMqttBus bus) : Background
     private async Task ConsumeAsync(CancellationToken stoppingToken)
     {
 
-        var options = new SubscriptionOptions { Capacity = 32 };
-        await foreach (var message in context.DHT230222_Modules.ReadAllAsync(options, stoppingToken))
+        await foreach (var message in context.DHT230222_Modules.ReadAllAsync(stoppingToken))
         {
             if (message.Data.Temperature > 20.5)
             {

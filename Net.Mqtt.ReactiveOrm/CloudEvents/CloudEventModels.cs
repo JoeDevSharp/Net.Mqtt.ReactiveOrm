@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Net.Mqtt.ReactiveOrm.Contracts;
 
 namespace Net.Mqtt.ReactiveOrm.CloudEvents;
 
@@ -18,6 +19,11 @@ public sealed record CloudEventMessage<TData>
 }
 
 public sealed record CloudEventIdentity(Uri Source, string Id);
+
+public sealed class InvalidMqttCloudEventException(string topic, string? contentType, Exception inner)
+    : ContractValidationException(
+        $"MQTT message on topic '{topic}' is not a valid structured CloudEvent 1.0 (Content Type: '{contentType ?? "implicit/MQTT 3.1.1"}').",
+        inner);
 
 public sealed record CloudEventEnvelope(
     string SpecVersion,

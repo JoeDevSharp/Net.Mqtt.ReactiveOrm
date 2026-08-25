@@ -1,52 +1,91 @@
 # Net.Mqtt.ReactiveOrm
 
-SDK MQTT tipado, asíncrono y reactivo para Worker Services .NET.
+## Presentación
 
-Net.Mqtt.ReactiveOrm mantiene un modelo sencillo:
+Net.Mqtt.ReactiveOrm es el SDK MQTT común para Worker Services .NET. Conserva una idea deliberadamente pequeña —`topic MQTT ↔ TopicSet<TData> ↔ flujo tipado`— y centraliza alrededor de ella las obligaciones de una mensajería de producción: conexión, seguridad, CloudEvents, contratos, validación, resiliencia y consumo controlado.
+
+El objetivo de la API pública es que el código de negocio trabaje con `TData` y `MqttMessageContext<TData>`, no con clientes MQTTnet, bytes, cabeceras ni lógica de reconexión.
+
+## Descripción
+
+La biblioteca se apoya en MQTTnet, pero no lo expone como dependencia del contexto de aplicación. Un único `IMqttBus` inyectable comparte la conexión dentro del Worker; `MqttOrmContext` declara el modelo de topics; y cada `TopicSet<TData>` publica y consume exclusivamente CloudEvents 1.0 validados contra el contrato asociado al tipo C#.
 
 ```text
-Topic MQTT <-> TopicSet<T> <-> IAsyncEnumerable<T> / IObservable<T>
+Topic MQTT
+  → transporte seguro y resiliente
+  → CloudEvent 1.0
+  → contrato y JSON Schema
+  → TopicSet<TData>
+  → IAsyncEnumerable<MqttMessageContext<TData>>
 ```
 
-La versión 2 convierte ese modelo en una infraestructura apta para servicios de larga duración: transporte inyectable, API cancelable, backpressure, acknowledgements después del procesamiento, sesiones persistentes, reconexión automática, Last Will y ciclo de vida integrado con Generic Host.
+La configuración habitual utiliza un único punto de entrada fluent. La biblioteca registra internamente MQTTnet, CloudEvents, contratos, schemas, topics, validadores y ciclo de vida.
 
-## Estado actual
+## Propósito
 
-La biblioteca incluye:
+Su propósito es ofrecer a todos los Workers la misma semántica técnica y evitar implementaciones diferentes para problemas transversales. Un productor no puede publicar un payload de negocio desnudo; un consumidor no recibe datos antes de validar su CloudEvent y su schema; y una entrega no se confirma hasta que la aplicación ejecuta `AcknowledgeAsync`.
 
-- `IMqttBus` como frontera pública del transporte.
-- `MqttNetBus` como implementación basada en MQTTnet.
-- `InMemoryMqttBus` para pruebas sin broker.
-- `MqttOrmContext` sin construcción oculta del cliente MQTT.
-- Registro explícito de topics mediante `TopicModelBuilder`.
-- Publicación y consumo completamente asíncronos y cancelables.
-- CloudEvents 1.0 tipados en structured content mode JSON para todos los mensajes.
-- Registro versionado de contratos C# y validación JSON Schema antes de publicar y consumir.
-- Consumo recomendado mediante `IAsyncEnumerable<MqttMessageContext<T>>`.
-- Compatibilidad con Reactive Extensions mediante `IObservable<T>`.
-- Canales acotados para aplicar backpressure.
-- Acknowledgement explícito después del procesamiento.
-- MQTT 5 como protocolo predeterminado y compatibilidad MQTT 3.1.1.
-- Sesiones persistentes y detección de sesiones restauradas.
-- Reconexión con backoff exponencial y jitter.
-- Restauración automática de suscripciones cuando el broker no restaura la sesión.
-- Máquina de estados observable y señal de readiness.
-- Last Will CloudEvent `UNAVAILABLE`.
-- TLS/mTLS Zero Trust avec validation stricte et rotation de certificats.
-- Integración con Generic Host e inyección de dependencias.
+La biblioteca está pensada para brokers MQTT internos, bridges controlados y contratos generados desde un metamodelo. Los Workers permanecen desacoplados de Kafka, de las bases de datos de otros servicios y de los detalles internos del transporte.
 
-> La API 2.0 es incompatible con la API 1.x. Ya no existen `Publish()`, `Unsubscribe()`, constructores de contexto con host/puerto ni inicialización de propiedades mediante reflexión.
+## Contenido
 
-## Requisitos
+- [Presentación](#presentación)
+- [Descripción](#descripción)
+- [Propósito](#propósito)
+- [Qué resuelve](#qué-resuelve)
+- [Funcionalidades](#funcionalidades)
+- [Inicio rápido](#inicio-rápido)
+- [Ejemplos por funcionalidad](#ejemplos-por-funcionalidad)
+- [Flujo de publicación y consumo](#flujo-de-publicación-y-consumo)
+- [Presets](#presets)
+- [Referencia de la API fluent](#referencia-de-la-api-fluent)
+- [Paquetes contractuales generados](#paquetes-contractuales-generados)
+- [Topics dinámicos](#topics-dinámicos)
+- [CloudEvents](#cloudevents)
+- [Contratos y schemas](#contratos-y-schemas)
+- [TLS y mTLS](#tls-y-mtls)
+- [Ciclo de vida, sesiones y reconexión](#ciclo-de-vida-sesiones-y-reconexión)
+- [Errores y acknowledgements](#errores-y-acknowledgements)
+- [Pruebas](#pruebas)
+- [Límites actuales](#límites-actuales)
 
-- .NET 10
-- Un broker compatible con MQTT 5 o MQTT 3.1.1
+## Qué resuelve
 
-Para ejecutar la demo se puede iniciar Mosquitto con:
+La biblioteca centraliza las decisiones técnicas que de otro modo acabarían repetidas en cada Worker:
 
-```bash
-docker compose up -d
-```
+| Área | Responsabilidad |
+|---|---|
+| Transporte | Conexión MQTTnet compartida e inyectable |
+| Ciclo de vida | Inicio y cierre coordinados con Generic Host |
+| Resiliencia | Sesiones persistentes, reconexión y resuscripción |
+| Seguridad | TLS/mTLS estricto y rotación de certificados |
+| Envelope | CloudEvents 1.0 structured JSON obligatorio |
+| Contratos | Relación entre `type`, `dataschema`, versión y tipo C# |
+| Validación | Límites, campos prohibidos y perfil JSON Schema |
+| Topics | Separación entre publicación y filtro de suscripción |
+| Consumo | Cancelación, backpressure y acknowledgement explícito |
+| Pruebas | Transporte en memoria sin broker real |
+
+No es un broker ni un reemplazo de MQTTnet. Es una capa de aplicación que impone un protocolo común encima de MQTTnet.
+
+## Funcionalidades
+
+| Funcionalidad | Resultado |
+|---|---|
+| Transporte inyectable | `IMqttBus` aísla MQTTnet y permite sustituirlo por un bus en memoria |
+| API asíncrona | Publicación, lectura, conexión, desconexión y acknowledgement aceptan `CancellationToken` |
+| MQTT 5 y 3.1.1 | MQTT 5 es el modo preferido; MQTT 3.1.1 conserva el payload CloudEvents estructurado |
+| Ciclo de vida | Máquina de estados, sesiones persistentes, reconexión con jitter, resuscripción y LWT |
+| TLS y mTLS | Confianza estricta del servidor, nombre esperado, revocación, identidad cliente y rotación |
+| CloudEvents tipado | Envelope 1.0 obligatorio; `TopicSet<TData>` representa únicamente `data` |
+| Contratos | Asociación única entre tipo C#, `type`, `dataschema` y versión |
+| Validación | Tamaño, campos prohibidos, perfil JSON común y subconjunto JSON Schema |
+| Modelo de topics | Diferencia explícita entre topic de publicación y filtro de suscripción |
+| Consumo controlado | `IAsyncEnumerable`, canal acotado, backpressure y acknowledgement después del procesamiento |
+| Compatibilidad Rx | `IObservable<T>` se conserva para migraciones y escenarios sin acknowledgement manual |
+| Testabilidad | `InMemoryMqttBus` ejecuta el pipeline sin un broker real |
+
+Las secciones [Inicio rápido](#inicio-rápido) y [Ejemplos por funcionalidad](#ejemplos-por-funcionalidad) muestran la implementación de todas estas capacidades.
 
 ## Instalación
 
@@ -54,13 +93,14 @@ docker compose up -d
 dotnet add package Net.Mqtt.ReactiveOrm
 ```
 
-Durante el desarrollo también puede utilizarse una referencia directa al proyecto:
+Requisitos:
 
-```xml
-<ProjectReference Include="..\Net.Mqtt.ReactiveOrm\Net.Mqtt.ReactiveOrm.csproj" />
-```
+- .NET 10
+- Broker MQTT 5 o MQTT 3.1.1
 
-## 1. Definir el contrato de datos
+## Inicio rápido
+
+### 1. Contrato de datos
 
 ```csharp
 public sealed class SensorReading
@@ -72,172 +112,116 @@ public sealed class SensorReading
 }
 ```
 
-`TopicSet<TData>` representa exclusivamente el tipo de `data`. La biblioteca lo envuelve siempre en un CloudEvent 1.0 structured JSON mediante `ICloudEventFactory` e `ICloudEventCodec`. Un payload métier JSON sin envelope CloudEvents no es válido.
+### 2. Contexto MQTT
 
-## 2. Registrar explícitamente el modelo de topics
-
-El contexto no inspecciona ni modifica propiedades derivadas durante su construcción. Cada `TopicSet<T>` se resuelve desde un modelo explícito e inmutable:
+El contexto solo declara sus topics. No construye conexiones ni registra contratos:
 
 ```csharp
 using Net.Mqtt.ReactiveOrm;
-using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
+using Net.Mqtt.ReactiveOrm.Attributes;
 using Net.Mqtt.ReactiveOrm.Enums;
-using Net.Mqtt.ReactiveOrm.Models;
-using Net.Mqtt.ReactiveOrm.CloudEvents;
-using Net.Mqtt.ReactiveOrm.Contracts;
 
 public sealed class ApplicationMqttContext(
-    IMqttBus bus,
-    ITopicModel model,
-    ICloudEventFactory cloudEventFactory,
-    ICloudEventCodec cloudEventCodec,
-    IEventContractRegistry contractRegistry,
-    IEventDataValidator dataValidator)
-    : MqttOrmContext(
-        bus, model, cloudEventFactory, cloudEventCodec,
-        contractRegistry, dataValidator)
+    MqttContextDependencies dependencies)
+    : MqttOrmContext(dependencies)
 {
-    public TopicSet<SensorReading> SensorReadings => Set<SensorReading>();
-
-    public static TopicModel CreateModel() => new TopicModelBuilder()
-        .Add<SensorReading>(
-            nameof(SensorReadings),
-            "factory/sensors/SensorReading/events",
-            QoSLevel.AtLeastOnce,
-            cloudEvent: new CloudEventDescriptor(
-                Source: new Uri("urn:factory:equipment-worker"),
-                Type: "com.factory.sensor.reading.v1",
-                DataSchema: new Uri("urn:schema:factory:sensor-reading:v1")))
-        .Build();
+    [MqttTopic(
+        PublishTopic = "factory/sensors/readings/events",
+        SubscribeFilter = "factory/sensors/+/events",
+        QoS = MqttQoS.AtLeastOnce,
+        Retain = false)]
+    public TopicSet<SensorReading> SensorReadings =>
+        Set<SensorReading>();
 }
 ```
 
-El nombre usado en `TopicModelBuilder.Add<T>()` debe coincidir con el nombre de la propiedad. `Set<T>()` obtiene ese nombre mediante `CallerMemberName`, sin reflexión.
+`PublishTopic` nunca admite `+`, `#` ni `@`. `SubscribeFilter` permite los wildcards MQTT válidos `+` y `#`.
 
-La marca `@` de una plantilla se sustituye por el nombre del tipo:
-
-```csharp
-.Add<SensorReading>(
-    nameof(SensorReadings),
-    "factory/sensors/@/events")
-```
-
-## 3. Configurar MQTT y Generic Host
+### 3. Configuración fluent
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using MQTTnet.Formatter;
-using Net.Mqtt.ReactiveOrm.Models;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddMqttReactiveOrm(options =>
+builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(mqtt =>
 {
-    options.ProtocolVersion = MqttProtocolVersion.V500;
-    options.Server = "mosquitto.enterprise.svc.internal";
-    options.Port = 1883;
-    options.Transport = MqttTransport.Tcp;
-    options.ClientId = "enterprise-equipment-worker";
+    mqtt.ConnectTo("localhost", 1883)
+        .IdentifyAs("equipment-worker")
+        .ForModule("factory")
+        .WithCloudEventSource("urn:factory:equipment-worker")
+        .UseDevelopmentDefaults()
+        .UseUnavailableLastWill();
 
-    options.KeepAlive = TimeSpan.FromSeconds(30);
-    options.Timeout = TimeSpan.FromSeconds(10);
-    options.MaximumPacketSize = 1024 * 1024;
-    options.ReceiveMaximum = 32;
+    mqtt.UseContracts(contracts =>
+        contracts.Add<SensorReading>(
+            eventType: "com.factory.sensor.reading.v1",
+            dataSchema: new Uri(
+                "urn:schema:factory:sensor-reading:v1"),
+            version: new Version(1, 0, 0),
+            maximumDataSize: 16 * 1024,
+            forbiddenFields: ["password", "secret"]));
 
-    options.Session.CleanStart = false;
-    options.Session.Expiry = TimeSpan.FromHours(24);
-
-    options.Reconnect.UseExponentialBackoff(
-        initialDelay: TimeSpan.FromSeconds(1),
-        maximumDelay: TimeSpan.FromSeconds(30));
-    options.Reconnect.MaximumAttempts = 20;
-    options.Reconnect.MaximumDuration = TimeSpan.FromMinutes(10);
-
-    options.LastWill.MessageExpiry = TimeSpan.FromMinutes(5);
-    options.LastWill.UseServiceUnavailableCloudEvent();
+    mqtt.UseSchemas(schemas => schemas.AddInline(
+        uri: "urn:schema:factory:sensor-reading:v1",
+        jsonSchema:
+        """
+        {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "required": ["sensorId", "temperature", "humidity", "timestamp"],
+          "properties": {
+            "sensorId": { "type": "string", "minLength": 1 },
+            "temperature": { "type": "number", "minimum": -273.15 },
+            "humidity": { "type": "number", "minimum": 0, "maximum": 100 },
+            "timestamp": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+        """,
+        version: "1.0.0"));
 });
 
-builder.Services.AddSingleton<ITopicModel>(
-    _ => ApplicationMqttContext.CreateModel());
-builder.Services.AddSingleton<ApplicationMqttContext>();
 builder.Services.AddHostedService<SensorWorker>();
-
 await builder.Build().RunAsync();
 ```
 
-`AddMqttReactiveOrm` registra un único `IMqttBus` compartido. Un servicio hospedado conecta el bus durante el arranque y realiza un cierre ordenado cuando el Host recibe su señal de parada.
+Esta única llamada registra:
 
-### WebSocket
+- `IMqttBus` compartido;
+- `MqttNetBus`;
+- `ITopicModel`;
+- `ICloudEventFactory` y `ICloudEventCodec`;
+- `IEventContractRegistry`;
+- resolutor, caché y validador JSON Schema;
+- `MqttContextDependencies`;
+- `ApplicationMqttContext`;
+- servicio de conexión y cierre MQTT.
 
-```csharp
-options.Transport = MqttTransport.WebSocket;
-options.WebSocketUri = "ws://localhost:9001/mqtt";
-```
-
-### MQTT 3.1.1
-
-```csharp
-options.ProtocolVersion = MqttProtocolVersion.V311;
-```
-
-En modo MQTT 3.1.1 la biblioteca usa `CleanSession = false`. En MQTT 5 usa `CleanStart` y `Session.Expiry`.
-
-## 4. Consumir con cancelación, backpressure y acknowledgement
-
-`ReadAllAsync` es la API recomendada para Workers:
+### 4. Worker
 
 ```csharp
-using Microsoft.Extensions.Hosting;
-using Net.Mqtt.ReactiveOrm.Models;
-
 public sealed class SensorWorker(
-    ApplicationMqttContext context) : BackgroundService
+    ApplicationMqttContext context)
+    : BackgroundService
 {
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
-        var options = new SubscriptionOptions
-        {
-            Capacity = 64
-        };
-
-        await foreach (var message in context.SensorReadings.ReadAllAsync(
-            options,
-            stoppingToken))
+        await foreach (var message in
+            context.SensorReadings.ReadAllAsync(stoppingToken))
         {
             await ProcessAsync(message.Data, stoppingToken);
 
-            // Solo confirmar después de que el procesamiento termine correctamente.
+            // Confirmar únicamente después del procesamiento correcto.
             await message.AcknowledgeAsync(stoppingToken);
         }
-    }
-
-    private static Task ProcessAsync(
-        SensorReading reading,
-        CancellationToken cancellationToken)
-    {
-        Console.WriteLine(
-            $"{reading.SensorId}: {reading.Temperature} °C");
-        return Task.CompletedTask;
     }
 }
 ```
 
-`MqttMessageContext<T>` expone:
-
-- `Data`: objeto deserializado.
-- `CloudEvent`: envelope tipado completo.
-- `Identity`: identidad compuesta por `Source` e `Id`.
-- `Topic`: topic MQTT real que recibió el mensaje.
-- `QoS`: nivel de entrega.
-- `Retain`: indica si el mensaje fue entregado como retained.
-- `IsAcknowledged`: estado local del acknowledgement.
-- `AcknowledgeAsync()`: confirmación idempotente.
-
-La capacidad de `SubscriptionOptions` crea un canal acotado. Cuando el consumidor no puede mantener el ritmo, la lectura MQTT espera en lugar de acumular mensajes indefinidamente.
-
-## 5. Publicar
+Publicación:
 
 ```csharp
 await context.SensorReadings.PublishAsync(
@@ -247,47 +231,510 @@ await context.SensorReadings.PublishAsync(
         Temperature = 23.7,
         Humidity = 41.2
     },
+    stoppingToken);
+```
+
+## Ejemplos por funcionalidad
+
+### Transporte inyectable y bus compartido
+
+El contexto recibe todas sus dependencias por DI. No crea un cliente MQTTnet ni abre una conexión propia:
+
+```csharp
+public sealed class ApplicationMqttContext(MqttContextDependencies dependencies)
+    : MqttOrmContext(dependencies)
+{
+}
+
+public sealed class HealthProbe(IMqttBus bus)
+{
+    public bool IsReady => bus.IsReady;
+}
+```
+
+Todas las instancias del contexto y los servicios del Worker utilizan el mismo `IMqttBus`. En pruebas, `UseInMemoryTransport()` sustituye la implementación sin cambiar el contexto ni el consumidor.
+
+### MQTT 5, MQTT 3.1.1, TCP y WebSocket
+
+MQTT 5 sobre TCP es la opción recomendada:
+
+```csharp
+mqtt.ConnectTo("mosquitto.internal", 8883)
+    .UseMqtt5();
+```
+
+Para interoperar con un broker antiguo:
+
+```csharp
+mqtt.ConnectTo("legacy-broker.internal", 1883)
+    .UseMqtt311();
+```
+
+Para WebSocket, además del transporte se indica la URI completa:
+
+```csharp
+mqtt.ConnectTo("mosquitto.internal", 443, MqttTransport.WebSocket);
+mqtt.Advanced.WebSocketUri = "wss://mosquitto.internal/mqtt";
+```
+
+El envelope CloudEvents structured JSON es obligatorio en las dos versiones del protocolo.
+
+### Sesión persistente, reconexión y Last Will
+
+```csharp
+mqtt.UsePersistentSession(TimeSpan.FromHours(24))
+    .UseExponentialReconnect(
+        initial: TimeSpan.FromSeconds(1),
+        maximum: TimeSpan.FromMinutes(1))
+    .UseUnavailableLastWill("factory/services/equipment-worker/status");
+```
+
+MQTT 5 usa `Clean Start` y `Session Expiry Interval`; MQTT 3.1.1 usa `Clean Session = false`. Cuando el broker no restaura la sesión, el bus restaura automáticamente sus suscripciones.
+
+### Estado, readiness y sesión restaurada
+
+```csharp
+public sealed class MqttMonitor(IMqttBus bus)
+{
+    public void Start()
+    {
+        bus.StateChanged += (_, change) =>
+            Console.WriteLine($"{change.Previous} -> {change.Current}");
+    }
+
+    public bool Ready => bus.IsReady;
+    public bool SessionWasRestored => bus.WasSessionRestored;
+}
+```
+
+La readiness debe depender de `IsReady`, no solo de que exista un socket conectado.
+
+### TLS/mTLS y rotación de certificados
+
+Desde un PFX montado como secreto:
+
+```csharp
+mqtt.UseMutualTls(mtls =>
+{
+    mtls.ClientCertificateProvider =
+        new PfxCertificateProvider("/run/secrets/worker.pfx", password);
+    mtls.ExpectedServerName = "mosquitto.internal";
+    mtls.ExpectedClientIdentity = "equipment-worker";
+    mtls.CheckCertificateRevocation = true;
+});
+```
+
+También existen proveedores PEM, certificate store y secretos externos:
+
+```csharp
+var pem = new PemCertificateProvider("worker.crt", "worker.key");
+var store = new StoreCertificateProvider(certificateThumbprint);
+var secret = new SecretCertificateProvider(
+    token => vault.GetCertificateAsync("equipment-worker", token));
+
+secret.SignalRotation(); // Notifica el cambio y fuerza una reconexión segura.
+```
+
+La expiración se puede observar sin acceder al certificado privado:
+
+```csharp
+bus.CertificateExpiring += (_, warning) =>
+    logger.LogWarning("El certificado {Subject} vence en {Remaining}",
+        warning.Subject, warning.Remaining);
+```
+
+La cadena del servidor, DNS/SAN, periodo de validez y revocación se validan siempre. Las opciones permisivas no forman parte de la API de producción.
+
+### CloudEvents y correlación
+
+```csharp
+await context.SensorReadings.PublishAsync(reading,
     new CloudEventPublishOptions
     {
         Context = new CloudEventPublishContext
         {
-            Subject = "sensor-42",
+            Subject = reading.SensorId,
             Extensions = new CloudEventExtensions
             {
                 CorrelationId = correlationId,
-                CausationId = causationId
+                CausationId = commandId,
+                NegotiationId = negotiationId,
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
             }
         }
-    },
-    stoppingToken);
+    }, cancellationToken);
 ```
 
-Es posible sobrescribir QoS y retained para una publicación concreta:
+El SDK genera `specversion`, `id`, `source`, `type`, `datacontenttype`, `dataschema` y `time`. La identidad idempotente que expone el mensaje es el par `source + id`, nunca `id` por separado.
+
+### Contrato, versión y JSON Schema
+
+```csharp
+mqtt.UseContracts(contracts => contracts.Add<SensorReading>(
+    eventType: "com.factory.sensor.reading.v1",
+    dataSchema: new Uri("urn:schema:factory:sensor-reading:v1"),
+    version: new Version(1, 0, 0),
+    compatibility: ContractCompatibility.SameMajor,
+    maximumDataSize: 16 * 1024,
+    forbiddenFields: ["password", "secret"],
+    compatibleSchemas:
+    [
+        new Uri("urn:schema:factory:sensor-reading:v1.1")
+    ]));
+
+mqtt.UseSchemas(schemas => schemas.AddInline(
+    "urn:schema:factory:sensor-reading:v1",
+    SensorSchemas.ReadingV1,
+    "1.0.0"));
+```
+
+La validación se ejecuta antes de publicar y después de recibir, pero antes de exponer `TData`.
+
+### Schemas locales, remotos y caché
+
+```csharp
+mqtt.UseSchemas(schemas => schemas.Use(
+    new FileJsonSchemaResolver(new Dictionary<Uri, string>
+    {
+        [new Uri("urn:schema:factory:sensor-reading:v1")] =
+            "/app/contracts/sensor-reading-v1.schema.json"
+    })));
+
+mqtt.UseSchemaResolver(
+    new HttpJsonSchemaResolver(httpClient),
+    cacheCapacity: 128);
+```
+
+El resolutor HTTP solo debe apuntar a un repositorio contractual confiable. La caché está acotada para que un conjunto no controlado de URIs no aumente indefinidamente la memoria.
+
+### Proyección explícita Protobuf → JSON
+
+```csharp
+var mapper = new DelegateContractJsonMapper<GeneratedReading>(
+    value => GeneratedReadingJson.Serialize(value),
+    json => GeneratedReadingJson.Deserialize(json));
+
+mqtt.UseContracts(contracts => contracts.Add<GeneratedReading>(
+    "com.factory.sensor.reading.v1",
+    new Uri("urn:schema:factory:sensor-reading:v1"),
+    new Version(1, 0, 0),
+    jsonMapper: mapper));
+```
+
+No se infiere una conversión Protobuf arbitraria: el paquete contractual gobierna la representación JSON que se valida y transporta.
+
+### Topics estáticos y dinámicos
+
+Un topic estático se declara una sola vez en `[MqttTopic]`; el registro contractual aporta `type` y `dataschema`:
+
+```csharp
+[MqttTopic(
+    PublishTopic = "factory/sensors/readings/events",
+    SubscribeFilter = "factory/sensors/+/events",
+    QoS = MqttQoS.AtLeastOnce)]
+public TopicSet<SensorReading> SensorReadings => Set<SensorReading>();
+```
+
+Para topics calculados, se omite `PublishTopic` y se utiliza `ResolverType`; hay un ejemplo completo en [Topics dinámicos](#topics-dinámicos).
+
+### Consumo asíncrono, backpressure y acknowledgement
+
+```csharp
+await foreach (var message in context.SensorReadings.ReadAllAsync(
+    new SubscriptionOptions { Capacity = 32 }, cancellationToken))
+{
+    await handler.HandleAsync(message.Data, cancellationToken);
+    await message.AcknowledgeAsync(cancellationToken);
+}
+```
+
+El canal acotado frena la lectura cuando el consumidor se retrasa. Si el handler falla, no se ejecuta el acknowledgement y MQTT puede volver a entregar el mensaje según su QoS y sesión.
+
+### Compatibilidad reactiva
+
+```csharp
+using var subscription = context.SensorReadings
+    .Where(reading => reading.Temperature > 30)
+    .Subscribe(reading => logger.LogWarning(
+        "Temperatura alta: {Temperature}", reading.Temperature));
+```
+
+Rx se mantiene para compatibilidad y flujos simples. Para Workers se recomienda `ReadAllAsync`, porque propaga cancelación, aplica backpressure y entrega el contexto necesario para confirmar después del resultado de negocio.
+
+### Pruebas sin Mosquitto
+
+```csharp
+services.AddMqttReactiveOrm<TestMqttContext>(mqtt =>
+{
+    mqtt.UseInMemoryTransport()
+        .ForModule("tests")
+        .WithCloudEventSource("urn:tests:sensor-worker");
+    mqtt.UseContracts(RegisterContracts);
+    mqtt.UseSchemas(RegisterSchemas);
+});
+```
+
+El mismo test puede resolver `TestMqttContext`, publicar y leer mediante la API real, sin puertos, contenedores ni esperas de red.
+
+## Flujo de publicación y consumo
+
+### Publicación
+
+```text
+TData
+  → resolver el contrato por tipo C#
+  → comprobar CloudEvent type + dataschema
+  → serializar con el perfil JSON determinista
+  → validar tamaño y campos prohibidos
+  → validar JSON Schema
+  → crear CloudEvent 1.0
+  → resolver y validar PublishTopic
+  → publicar mediante IMqttBus
+```
+
+La publicación se detiene antes de tocar el broker si el contrato o el schema no son válidos.
+
+Para añadir metadatos técnicos:
 
 ```csharp
 await context.SensorReadings.PublishAsync(
     reading,
     new CloudEventPublishOptions
     {
-        QoS = QoSLevel.ExactlyOnce,
-        Retain = false
+        QoS = QoSLevel.AtLeastOnce,
+        Retain = false,
+        Context = new CloudEventPublishContext
+        {
+            Subject = reading.SensorId,
+            Extensions = new CloudEventExtensions
+            {
+                CorrelationId = correlationId,
+                CausationId = commandId,
+                ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5)
+            }
+        }
     },
     stoppingToken);
 ```
 
-`PublishAsync` propaga la cancelación y lanza una excepción si MQTTnet informa que la publicación no fue aceptada.
+Si existe una `Activity` activa, `traceparent` y `tracestate` se copian automáticamente cuando no se especifican manualmente.
 
-## CloudEvents 1.0 tipados
-
-Todo mensaje aplicativo se transporta en structured content mode JSON. En MQTT 5 la publicación incluye:
+### Consumo
 
 ```text
-Content Type: application/cloudevents+json; charset=utf-8
+MqttDelivery
+  → validar Content Type y envelope CloudEvents
+  → resolver el contrato por CloudEvent type
+  → comprobar dataschema + versión + TData
+  → validar límites y JSON Schema sobre data sin deserializarla
+  → deserializar TData
+  → entregar MqttMessageContext<TData>
+  → procesar
+  → acknowledge
 ```
 
-MQTT 3.1.1 transporta exactamente el mismo JSON, pero el Content Type queda implícito porque esa versión del protocolo no dispone de la propiedad MQTT correspondiente.
+La capacidad predeterminada de una suscripción es 128 mensajes. Puede ajustarse para aplicar backpressure:
 
-Ejemplo del payload MQTT generado:
+```csharp
+await foreach (var message in context.SensorReadings.ReadAllAsync(
+    new SubscriptionOptions
+    {
+        Capacity = 32,
+        QoS = QoSLevel.AtLeastOnce
+    },
+    stoppingToken))
+{
+    await HandleAsync(message.Data, stoppingToken);
+    await message.AcknowledgeAsync(stoppingToken);
+}
+```
+
+## Presets
+
+### Desarrollo
+
+```csharp
+mqtt.UseDevelopmentDefaults();
+```
+
+Activa MQTT 5, sesión limpia sin persistencia y reconexión rápida. Esto evita que Mosquitto reentregue durante el desarrollo mensajes encolados con una versión contractual o formato anterior.
+
+### Producción
+
+```csharp
+mqtt.UseProductionDefaults();
+```
+
+Activa:
+
+- MQTT 5;
+- sesión persistente durante 24 horas;
+- backoff exponencial con jitter;
+- Last Will CloudEvent `UNAVAILABLE`;
+- keep-alive de 30 segundos;
+- timeout de 10 segundos;
+- límite de paquete de 1 MiB;
+- 32 mensajes QoS pendientes.
+
+La configuración mTLS continúa siendo explícita porque necesita un certificado:
+
+```csharp
+mqtt.UseMutualTls(mtls =>
+{
+    mtls.ClientCertificateProvider =
+        new PfxCertificateProvider(
+            "/run/secrets/equipment-worker.pfx",
+            certificatePassword);
+
+    mtls.ExpectedServerName =
+        "mosquitto.enterprise.svc.internal";
+    mtls.ExpectedClientIdentity =
+        "equipment-worker";
+});
+```
+
+No es posible desactivar la confianza del servidor, los errores de cadena ni la revocación.
+
+### Pruebas sin broker
+
+```csharp
+services.AddMqttReactiveOrm<TestMqttContext>(mqtt =>
+{
+    mqtt.UseInMemoryTransport()
+        .ForModule("tests")
+        .WithCloudEventSource("urn:tests:worker");
+
+    mqtt.UseContracts(RegisterTestContracts);
+    mqtt.UseSchemas(RegisterTestSchemas);
+});
+```
+
+`InMemoryMqttBus` conserva filtros, backpressure, CloudEvents y validación contractual sin iniciar Mosquitto.
+
+## Referencia de la API fluent
+
+Todos los métodos devuelven el mismo builder y pueden encadenarse:
+
+| Método | Efecto |
+|---|---|
+| `ConnectTo(server, port, transport)` | Configura TCP o WebSocket |
+| `IdentifyAs(clientId)` | Establece el ClientId estable |
+| `UseMqtt5()` | Selecciona MQTT 5 |
+| `UseMqtt311()` | Activa el modo compatible MQTT 3.1.1 |
+| `ForModule(namespace)` | Limita todos los topics al namespace del módulo |
+| `WithCloudEventSource(uri)` | Define la identidad CloudEvents del productor |
+| `UseContracts(configure)` | Registra contratos manualmente |
+| `UseSchemas(configure)` | Registra schemas inline o resolutores adicionales |
+| `UseSchemaResolver(resolver, capacity)` | Añade resolución local/remota con caché limitada |
+| `UseContractPackage<T>()` | Importa contratos y schemas de un paquete generado |
+| `UsePersistentSession(expiry)` | Conserva sesión y suscripciones en el broker |
+| `UseExponentialReconnect(initial, maximum)` | Configura reconexión con jitter |
+| `UseUnavailableLastWill(topic)` | Configura el LWT CloudEvent retained |
+| `UseMutualTls(configure)` | Activa TLS y certificado cliente |
+| `UseInMemoryTransport()` | Sustituye MQTTnet por el bus de pruebas |
+| `ForbidTopicValue(value)` | Impide que un dato sensible o de instancia aparezca en topics |
+| `UseDevelopmentDefaults()` | Aplica el preset local |
+| `UseProductionDefaults()` | Aplica el preset operativo |
+
+`Advanced` expone las opciones completas cuando un preset no basta:
+
+```csharp
+mqtt.Advanced.KeepAlive = TimeSpan.FromSeconds(20);
+mqtt.Advanced.Timeout = TimeSpan.FromSeconds(8);
+mqtt.Advanced.ReceiveMaximum = 64;
+mqtt.Advanced.MaximumPacketSize = 2 * 1024 * 1024;
+mqtt.Advanced.Reconnect.JitterRatio = 0.25;
+mqtt.Advanced.Reconnect.MaximumAttempts = 20;
+mqtt.Advanced.Reconnect.MaximumDuration = TimeSpan.FromMinutes(15);
+```
+
+La configuración se valida al registrar los servicios. `ConnectTo`, `IdentifyAs`, `ForModule`, `WithCloudEventSource`, al menos un contrato y su schema son necesarios para el transporte MQTT habitual.
+
+## Paquetes contractuales generados
+
+Un paquete NuGet generado desde el metamodelo puede implementar:
+
+```csharp
+public sealed class EquipmentContractPackage
+    : IMqttContractPackage
+{
+    public void Register(
+        EventContractRegistryBuilder contracts,
+        MqttSchemaBuilder schemas)
+    {
+        contracts.Add<SensorReading>(
+            "com.factory.sensor.reading.v1",
+            new Uri("urn:schema:factory:sensor-reading:v1"),
+            new Version(1, 0, 0));
+
+        schemas.AddInline(
+            "urn:schema:factory:sensor-reading:v1",
+            EmbeddedSchemas.SensorReadingV1,
+            "1.0.0");
+    }
+}
+```
+
+El Worker solo necesita:
+
+```csharp
+builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(
+    mqtt => mqtt
+        .ConnectTo("mosquitto.enterprise.svc.internal", 8883)
+        .IdentifyAs("equipment-worker")
+        .ForModule("factory")
+        .WithCloudEventSource("urn:factory:equipment-worker")
+        .UseContractPackage<EquipmentContractPackage>()
+        .UseProductionDefaults()
+        .UseMutualTls(ConfigureMutualTls));
+```
+
+Así, el Worker no repite `eventType`, `dataschema`, versión ni JSON Schema.
+
+También es posible descubrir tipos generados que tengan `[EventContract]`:
+
+```csharp
+mqtt.UseContracts(contracts =>
+    contracts.AddGeneratedContracts(
+        typeof(SensorReading).Assembly));
+```
+
+## Topics dinámicos
+
+```csharp
+public sealed class SensorTopicResolver
+    : ITopicResolver<SensorReading>
+{
+    public string ResolvePublishTopic(SensorReading data) =>
+        $"factory/sensors/{Normalize(data.SensorId)}/events";
+
+    public bool MatchesSubscription(string topic) =>
+        topic.StartsWith(
+            "factory/sensors/",
+            StringComparison.Ordinal);
+}
+```
+
+```csharp
+[MqttTopic(
+    SubscribeFilter = "factory/sensors/+/events",
+    ResolverType = typeof(SensorTopicResolver),
+    QoS = MqttQoS.AtLeastOnce)]
+public TopicSet<SensorReading> SensorReadings =>
+    Set<SensorReading>();
+```
+
+Registrar el resolver:
+
+```csharp
+builder.Services.AddSingleton<SensorTopicResolver>();
+```
+
+El topic producido por el resolver se valida en cada publicación.
+
+## CloudEvents
+
+Todos los payloads MQTT son CloudEvents 1.0 structured JSON:
 
 ```json
 {
@@ -300,191 +747,179 @@ Ejemplo del payload MQTT generado:
   "datacontenttype": "application/json",
   "dataschema": "urn:schema:factory:sensor-reading:v1",
   "correlationid": "production-order-9138",
-  "causationid": "command-2461",
   "data": {
     "sensorId": "sensor-42",
     "temperature": 23.7,
-    "humidity": 41.2,
-    "timestamp": "2026-08-25T08:57:24.5489680Z"
+    "humidity": 41.2
   }
 }
 ```
 
-La fábrica construye y valida los atributos obligatorios:
-
-- `specversion`, siempre `1.0`;
-- `id`, generado automáticamente si no se proporciona;
-- `source` y `type`, declarados en `CloudEventDescriptor`;
-- `datacontenttype`, `application/json` de forma predeterminada;
-- `time`, usando la fecha de ocurrencia indicada o UTC actual;
-- `dataschema` para contratos gobernados;
-- `subject` para una entidad funcional concreta.
-
-Las extensiones comunes disponibles son `correlationid`, `causationid`, `traceparent`, `tracestate`, `negotiationid` y `expiresat`. `traceparent` y `tracestate` se obtienen automáticamente de `Activity.Current` cuando no se indican explícitamente. Los nombres de extensiones adicionales deben usar únicamente minúsculas ASCII y dígitos.
-
-Los atributos CloudEvents se escriben en el nivel superior y no se duplican dentro de `data`. Durante el consumo se validan antes de deserializar el dato funcional. Un payload desnudo, una versión diferente de `1.0` o un Content Type MQTT 5 diferente se rechazan.
-
-La identidad idempotente es siempre el par:
+MQTT 5 añade:
 
 ```text
-source + id
+Content Type: application/cloudevents+json; charset=utf-8
 ```
 
-Puede obtenerse mediante `message.Identity`. Nunca debe utilizarse `id` de forma aislada como clave global.
+MQTT 3.1.1 transporta el mismo JSON con Content Type implícito.
 
-## 6. Compatibilidad reactiva
+`MqttMessageContext<T>` expone:
 
-`TopicSet<T>` continúa implementando `IObservable<T>`:
+- `Data`;
+- `CloudEvent`;
+- `Identity`, formada por `source + id`;
+- topic, QoS y retained;
+- `AcknowledgeAsync()`.
+
+Extensiones disponibles: `correlationid`, `causationid`, `traceparent`, `tracestate`, `negotiationid` y `expiresat`.
+
+## Contratos y schemas
+
+Antes de publicar y antes de exponer `TData`, la biblioteca valida:
+
+- envelope CloudEvents;
+- `type` conocido;
+- correspondencia entre `type`, `dataschema` y tipo C#;
+- compatibilidad de versión;
+- tamaño máximo;
+- campos prohibidos;
+- conformidad JSON Schema.
+
+Los errores contractuales implementan `INonRetryableError` con `IsRetryable = false`.
+
+Resolutores disponibles:
+
+- `InMemoryJsonSchemaResolver`;
+- `FileJsonSchemaResolver`;
+- `HttpJsonSchemaResolver`;
+- `CompositeJsonSchemaResolver`;
+- `CachingJsonSchemaResolver`.
+
+Resolver externo:
 
 ```csharp
-using System.Reactive.Linq;
-
-using var subscription = context.SensorReadings
-    .Where(reading => reading.Temperature > 25)
-    .Subscribe(reading =>
-        Console.WriteLine($"Alerta: {reading.Temperature} °C"));
+mqtt.UseSchemaResolver(
+    new HttpJsonSchemaResolver(httpClient),
+    cacheCapacity: 128);
 ```
 
-La suscripción se cancela al liberar el `IDisposable`. Para lógica asíncrona, control de backpressure y acknowledgement explícito debe preferirse `ReadAllAsync`.
+El perfil JSON común usa camelCase, números estrictos, propiedades desconocidas rechazadas y orden determinista.
 
-## 7. Ciclo de vida y readiness
+El validador implementa el perfil que necesita el SDK, no toda la especificación JSON Schema Draft 2020-12. Actualmente cubre `type`, `required`, `properties`, `additionalProperties`, `items`, `enum`, límites de cadenas y números, y referencias locales `#`. Los combinadores, formatos y `$ref` externos deben resolverse o normalizarse en el paquete contractual antes de registrarlo.
 
-`IMqttBus.State` recorre los siguientes estados:
+Para Protobuf debe proporcionarse un `IContractJsonMapper` explícito.
+
+## TLS y mTLS
+
+`UseMutualTls` activa TLS estricto y requiere un certificado cliente. El proveedor puede cargarlo desde PFX, PEM, certificate store o un gestor de secretos; esto permite conservar claves privadas no exportables cuando el store o proveedor subyacente lo soporte.
+
+```csharp
+mqtt.ConnectTo("mosquitto.enterprise.svc.internal", 8883)
+    .UseProductionDefaults()
+    .UseMutualTls(mtls =>
+    {
+        mtls.ClientCertificateProvider =
+            new StoreCertificateProvider(certificateThumbprint);
+        mtls.ExpectedServerName =
+            "mosquitto.enterprise.svc.internal";
+        mtls.ExpectedClientIdentity = "equipment-worker";
+        mtls.CheckCertificateRevocation = true;
+    });
+```
+
+Los proveedores de archivo vigilan cambios de PFX/PEM. `SecretCertificateProvider.SignalRotation()` ofrece la misma señal para un vault. El bus drena y reconecta para utilizar el certificado nuevo.
+
+## Ciclo de vida, sesiones y reconexión
 
 ```text
 Created
-  -> Connecting
-  -> Connected
-  -> Subscribing
-  -> Ready
-  -> Reconnecting
-  -> Draining
-  -> Stopped
+  → Connecting
+  → Connected
+  → Subscribing
+  → Ready
+  → Reconnecting
+  → Draining
+  → Stopped
 ```
 
-`Faulted` indica que la conexión inicial falló o que se agotó la política de reconexión.
+Un fallo terminal puede llevar el bus a `Faulted`. `IMqttBus.IsReady` solo es verdadero en `Ready`. Si el broker restaura la sesión persistente, las suscripciones no se duplican; si no la restaura, se registran nuevamente.
 
 ```csharp
 bus.StateChanged += (_, change) =>
-{
-    Console.WriteLine(
-        $"MQTT: {change.Previous} -> {change.Current}");
-};
+    logger.LogInformation("MQTT {Previous} -> {Current}",
+        change.Previous, change.Current);
 
-if (bus.IsReady)
+if (!bus.IsReady)
+    return HealthCheckResult.Unhealthy("MQTT no está preparado");
+```
+
+## Errores y acknowledgements
+
+Los fallos de envelope, contrato o schema derivan de `ContractValidationException` o implementan `INonRetryableError`. Esto permite que una política externa los envíe a cuarentena o DLQ sin reintentar un mensaje que nunca será válido.
+
+```csharp
+try
 {
-    // El Worker tiene conexión y sus suscripciones están restauradas.
+    await foreach (var message in topic.ReadAllAsync(cancellationToken))
+    {
+        await HandleAsync(message.Data, cancellationToken);
+        await message.AcknowledgeAsync(cancellationToken);
+    }
+}
+catch (Exception error) when
+    (error is INonRetryableError { IsRetryable: false })
+{
+    await quarantine.StoreAsync(error, cancellationToken);
 }
 ```
 
-La readiness se retira al abandonar `Ready`. `WasSessionRestored` indica si el broker devolvió una sesión existente en el último CONNACK.
+El SDK clasifica el error, pero todavía no incorpora un almacén DLQ, inbox idempotente ni outbox SQL. Esas decisiones requieren persistencia y transacciones propias de la aplicación.
 
-Después de una reconexión:
+## Pruebas
 
-- Si el broker restauró la sesión, no se duplican las suscripciones.
-- Si no la restauró, `MqttNetBus` vuelve a suscribir todos los filtros activos.
-
-## 8. Last Will and Testament
+Además del bus en memoria, el repositorio incluye una demo ejecutable contra Mosquitto. Un test de integración puede arrancar el host, resolver el contexto y usar exactamente las mismas llamadas que producción:
 
 ```csharp
-options.LastWill.MessageExpiry = TimeSpan.FromMinutes(5);
-options.LastWill.UseServiceUnavailableCloudEvent(
-    "services/equipment-worker/availability");
-```
+await context.SensorReadings.PublishAsync(reading, cancellationToken);
 
-Ante una desconexión abrupta, el broker publica un CloudEvent con estado `UNAVAILABLE`. De forma predeterminada el mensaje es retained. En un cierre normal, la biblioteca publica explícitamente el mismo estado antes de desconectarse.
-
-Si no se especifica un topic, se utiliza:
-
-```text
-services/{ClientId}/availability
-```
-
-## 9. Pruebas sin broker
-
-`InMemoryMqttBus` implementa el mismo contrato que `MqttNetBus`:
-
-```csharp
-await using var bus = new InMemoryMqttBus();
-var model = new TopicModelBuilder()
-    .Add<SensorReading>(
-        nameof(ApplicationMqttContext.SensorReadings),
-        "tests/sensors/events")
-    .Build();
-
-var context = new ApplicationMqttContext(bus, model);
-using var cancellation = new CancellationTokenSource();
-
-await using var reader = context.SensorReadings.ReadAllAsync(
-    SubscriptionOptions.Default,
-    cancellation.Token).GetAsyncEnumerator(cancellation.Token);
-
-// MoveNextAsync inicia y registra la suscripción antes de publicar.
-var nextMessage = reader.MoveNextAsync().AsTask();
-
-await context.SensorReadings.PublishAsync(
-    new SensorReading
-    {
-        SensorId = "test-sensor",
-        Temperature = 20
-    },
-    CloudEventPublishOptions.Default,
-    cancellation.Token);
-
-if (!await nextMessage)
-    throw new InvalidOperationException("La suscripción terminó sin recibir datos.");
-
-await reader.Current.AcknowledgeAsync(cancellation.Token);
-var received = reader.Current.Data;
-```
-
-El bus en memoria respeta filtros con comodines y canales acotados, por lo que permite probar el flujo tipado y la cancelación sin iniciar Mosquitto.
-
-## 10. Uso directo sin Generic Host
-
-Aunque Generic Host es la opción recomendada, también puede controlarse el transporte manualmente:
-
-```csharp
-var options = new MqttReactiveOrmOptions
+await foreach (var received in
+    context.SensorReadings.ReadAllAsync(cancellationToken))
 {
-    ClientId = "standalone-client",
-    Server = "localhost",
-    Port = 1883
-};
-
-await using var bus = new MqttNetBus(options);
-await bus.ConnectAsync(cancellationToken);
-
-// Publicación y consumo...
-
-await bus.DisconnectAsync(cancellationToken);
+    Assert.Equal(reading.SensorId, received.Data.SensorId);
+    await received.AcknowledgeAsync(cancellationToken);
+    break;
+}
 ```
 
-## Buenas prácticas
+## Límites actuales
 
-- Utilizar un `ClientId` estable y único por instancia de servicio.
-- Propagar siempre el `CancellationToken` del Host.
-- Confirmar el mensaje solamente después de completar el efecto aplicativo.
-- Mantener el procesamiento idempotente: MQTT puede entregar duplicados.
-- Elegir una capacidad de suscripción coherente con la carga y memoria disponibles.
-- No usar retained para flujos de eventos; reservarlo para estados o snapshots.
-- No bloquear tareas asíncronas mediante `.Wait()` o `.GetAwaiter().GetResult()`.
-- Supervisar `IsReady` y `StateChanged` para health checks y observabilidad.
+- No incluye broker, bridge, Kafka Connect ni acceso a Kafka.
+- No implementa todavía inbox, outbox, DLQ persistente ni protocolo de capacidades.
+- No deduplica automáticamente: expone `message.Identity` (`source + id`) para que una inbox transaccional pueda hacerlo.
+- No implementa el estándar JSON Schema completo; aplica el perfil documentado en [Contratos y schemas](#contratos-y-schemas).
+- No sustituye las ACL del broker: la política local previene errores, mientras Mosquitto conserva la autoridad final.
+- OpenTelemetry completo aún no está integrado; `traceparent` y `tracestate` sí se propagan en CloudEvents.
+
+## Configuración avanzada
+
+La API detallada sigue disponible mediante `Advanced`:
+
+```csharp
+mqtt.Advanced.ReceiveMaximum = 64;
+mqtt.Advanced.MaximumPacketSize = 2 * 1024 * 1024;
+mqtt.Advanced.Reconnect.JitterRatio = 0.25;
+mqtt.Advanced.Reconnect.MaximumAttempts = 20;
+```
+
+También permanecen disponibles las extensiones de registro de bajo nivel para integraciones especiales.
 
 ## Demo
 
-La carpeta [Demo](Demo) contiene un Worker completo con:
+Iniciar Mosquitto:
 
-- configuración MQTT 5;
-- sesión persistente;
-- reconexión exponencial;
-- LWT CloudEvent;
-- contrato C# versionado y JSON Schema local;
-- validación antes de publicar y antes de exponer `TData`;
-- contexto y modelo registrados mediante DI;
-- consumo cancelable con backpressure;
-- acknowledgement posterior al procesamiento;
-- publicación de un mensaje de ejemplo.
+```bash
+docker compose up -d
+```
 
 Ejecutar:
 
@@ -494,246 +929,16 @@ dotnet run --project Demo/Demo.csproj
 
 Detener con `Ctrl+C` para comprobar el cierre ordenado.
 
-## Seguridad TLS y mTLS
+### Payload anterior no compatible
 
-La configuración mTLS aplica validación estricta. La cadena del certificado del broker debe ser confiable para el sistema operativo, el DNS/SAN debe coincidir con `ExpectedServerName`, el certificado debe estar vigente y la comprobación de revocación permanece activa.
+Si aparece `InvalidMqttCloudEventException`, el broker entregó un mensaje que no usa CloudEvents structured JSON. `UseDevelopmentDefaults()` utiliza una sesión limpia para descartar mensajes QoS encolados por versiones anteriores.
 
-```csharp
-using Net.Mqtt.ReactiveOrm.Security;
+Un mensaje retained pertenece al topic y sobrevive incluso a una sesión limpia. Puede eliminarse publicando un payload vacío retained:
 
-var certificateProvider = new PfxCertificateProvider(
-    "/run/secrets/equipment-worker.pfx",
-    Environment.GetEnvironmentVariable("MQTT_CERTIFICATE_PASSWORD"));
-
-builder.Services.AddMqttReactiveOrm(options =>
-{
-    options.ProtocolVersion = MqttProtocolVersion.V500;
-    options.Server = "mosquitto.enterprise.svc.internal";
-    options.Port = 8883;
-    options.ClientId = "enterprise-equipment-worker";
-
-    options.Security.UseMutualTls(mtls =>
-    {
-        mtls.ClientCertificateProvider = certificateProvider;
-        mtls.RequireTrustedServerCertificate = true;
-        mtls.CheckCertificateRevocation = true;
-        mtls.ExpectedServerName = "mosquitto.enterprise.svc.internal";
-        mtls.ExpectedClientIdentity = "enterprise-equipment-worker";
-        mtls.ExpirationWarningThreshold = TimeSpan.FromDays(30);
-        mtls.ExpirationCheckInterval = TimeSpan.FromHours(1);
-    });
-});
+```bash
+mosquitto_pub -h localhost \
+  -t factory_64/sensors/DHT230222_Modules/events \
+  -r -n
 ```
 
-`ExpectedClientIdentity` vincula la identidad configurada del módulo con el DNS SAN o CN del certificado cliente. El certificado debe contener una clave privada y encontrarse dentro de su periodo de validez.
-
-Las opciones que desactivan la confianza o la revocación son rechazadas durante la validación:
-
-```csharp
-mtls.RequireTrustedServerCertificate = false; // Prohibido.
-mtls.CheckCertificateRevocation = false;      // Prohibido.
-```
-
-La biblioteca nunca habilita los equivalentes de:
-
-```text
-AllowUntrustedCertificates = true
-IgnoreCertificateChainErrors = true
-IgnoreCertificateRevocationErrors = true
-```
-
-### Proveedores de certificados
-
-Desde un archivo PFX:
-
-```csharp
-mtls.ClientCertificateProvider = new PfxCertificateProvider(
-    "/run/secrets/client.pfx",
-    password);
-```
-
-Desde archivos PEM:
-
-```csharp
-mtls.ClientCertificateProvider = new PemCertificateProvider(
-    "/run/secrets/client.crt",
-    "/run/secrets/client.key");
-```
-
-Desde el almacén de certificados. La clave privada se utiliza directamente y no necesita ser exportable:
-
-```csharp
-mtls.ClientCertificateProvider = new StoreCertificateProvider(
-    thumbprint,
-    StoreName.My,
-    StoreLocation.CurrentUser);
-```
-
-Desde un gestor de secretos o HSM mediante un resolver asíncrono:
-
-```csharp
-var provider = new SecretCertificateProvider(async cancellationToken =>
-    await secretStore.GetCertificateAsync("mqtt-client", cancellationToken));
-
-mtls.ClientCertificateProvider = provider;
-```
-
-Los proveedores PFX y PEM vigilan los archivos. Cuando Kubernetes, Docker Secrets u otro agente reemplaza el certificado, el bus recarga las credenciales y fuerza una reconexión ordenada. Para un proveedor de secretos, la integración debe señalar la rotación:
-
-```csharp
-provider.SignalRotation();
-```
-
-La expiración puede supervisarse desde el bus:
-
-```csharp
-bus.CertificateExpiring += (_, certificate) =>
-{
-    logger.LogWarning(
-        "El certificado {Thumbprint} expira en {Remaining}",
-        certificate.Thumbprint,
-        certificate.Remaining);
-};
-```
-
-Durante una rotación, `IsReady` deja de ser verdadero, la conexión pasa por `Draining` y solo vuelve a `Ready` después de autenticar el nuevo certificado y restaurar las suscripciones.
-
-## Metamodelo y validación de contratos
-
-Cada tipo de evento debe vincular tres representaciones de la misma versión contractual:
-
-```text
-CloudEvent type <-> dataschema <-> tipo C#
-```
-
-El registro se configura durante el arranque:
-
-```csharp
-using Net.Mqtt.ReactiveOrm.Contracts;
-
-var schemas = new InMemoryJsonSchemaResolver()
-    .Add(
-        new Uri("urn:schema:factory:sensor-reading:v1"),
-        """
-        {
-          "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "type": "object",
-          "required": ["sensorId", "temperature", "timestamp"],
-          "properties": {
-            "sensorId": { "type": "string", "minLength": 1 },
-            "temperature": { "type": "number", "minimum": -273.15 },
-            "timestamp": { "type": "string" }
-          },
-          "additionalProperties": false
-        }
-        """,
-        version: "1.0.0");
-
-builder.Services.AddMqttEventContracts(
-    contracts => contracts.Add<SensorReading>(
-        eventType: "com.factory.sensor.reading.v1",
-        dataSchema: new Uri("urn:schema:factory:sensor-reading:v1"),
-        version: new Version(1, 0, 0),
-        compatibility: ContractCompatibility.Exact,
-        maximumDataSize: 16 * 1024,
-        forbiddenFields: ["password", "secret"]),
-    schemas,
-    schemaCacheCapacity: 64);
-```
-
-Antes de publicar y después de recibir, pero antes de deserializar `TData`, se comprueba:
-
-- que el envelope CloudEvents sea válido;
-- que `type` esté registrado;
-- que `dataschema` esté autorizado para ese tipo;
-- que el contrato corresponda al tipo C# solicitado;
-- que el tamaño no supere `MaximumDataSize`;
-- que no aparezcan campos prohibidos, incluso dentro de objetos anidados;
-- que el JSON cumpla el esquema resuelto.
-
-Los errores `UnknownEventContractException`, `ContractMismatchException` y `EventDataValidationException` implementan `INonRetryableError` y exponen `IsRetryable = false`. Una futura política DLQ puede clasificarlos sin reintentar un mensaje que nunca será válido.
-
-### Contratos generados desde paquetes NuGet
-
-Los tipos producidos por el metamodelo pueden declarar sus metadatos directamente:
-
-```csharp
-[EventContract(
-    "com.factory.sensor.reading.v1",
-    "urn:schema:factory:sensor-reading:v1",
-    "1.0.0")]
-public sealed partial class SensorReading
-{
-    // Código generado por el paquete contractual.
-}
-```
-
-El assembly del paquete se registra sin buscar contratos fuera del conjunto indicado:
-
-```csharp
-var registry = new EventContractRegistryBuilder()
-    .AddGeneratedContracts(typeof(SensorReading).Assembly)
-    .Build();
-```
-
-También se puede llamar a `Add<TData>()` desde una extensión DI incluida en el propio paquete NuGet generado, evitando reflexión durante el consumo.
-
-### Resolución y caché de esquemas
-
-La biblioteca proporciona:
-
-- `InMemoryJsonSchemaResolver` para esquemas embebidos o pruebas;
-- `FileJsonSchemaResolver` para mappings URI → archivo local;
-- `HttpJsonSchemaResolver` para repositorios HTTP/HTTPS;
-- `CompositeJsonSchemaResolver` para encadenar resolución local y remota;
-- `CachingJsonSchemaResolver` con capacidad LRU, versión del recurso y refresco temporal.
-
-Ejemplo local con fallback remoto:
-
-```csharp
-var resolver = new CompositeJsonSchemaResolver(
-    localResolver,
-    new HttpJsonSchemaResolver(httpClient));
-
-builder.Services.AddMqttEventContracts(
-    ConfigureGeneratedContracts,
-    resolver,
-    schemaCacheCapacity: 128);
-```
-
-El validador soporta las restricciones comunes utilizadas por los contratos generados: `type`, `required`, `properties`, `additionalProperties`, `items`, `enum`, `minLength`, `maxLength`, `minimum`, `maximum` y referencias locales `#/$defs/...`.
-
-### Compatibilidad de versiones
-
-Las políticas disponibles son:
-
-- `Exact`: solo el `dataschema` registrado;
-- `SameMajor`: acepta esquemas con la misma versión mayor;
-- `BackwardCompatible`: permite al consumidor actual leer versiones anteriores de la misma major;
-- `CompatibleSchemas`: lista explícita de URIs autorizadas, recomendada cuando la versión no forma parte de la URI.
-
-La identidad del contrato no se deduce únicamente del nombre C#: siempre se validan conjuntamente `type`, `dataschema`, versión y `Type` CLR.
-
-### Perfil JSON y Protobuf
-
-`MqttJsonProfile` aplica camelCase, números estrictos, propiedades desconocidas rechazadas, valores no omitidos y salida sin indentación. Publicación, validación y deserialización utilizan la misma representación determinista.
-
-Cuando un contrato generado utiliza Protobuf, debe registrar una proyección JSON explícita:
-
-```csharp
-var mapper = new DelegateContractJsonMapper<GeneratedSensorReading>(
-    message => protobufJsonFormatter.FormatUtf8(message),
-    json => protobufJsonParser.Parse<GeneratedSensorReading>(json));
-
-contracts.Add<GeneratedSensorReading>(
-    eventType,
-    dataSchema,
-    new Version(1, 0, 0),
-    jsonMapper: mapper);
-```
-
-No se realiza ninguna conversión Protobuf implícita: el JSON validado y el mapping deben pertenecer al mismo paquete contractual.
-
-## Alcance de esta versión
-
-Esta versión implementa transporte inyectable, API asíncrona, ciclo de vida MQTT, seguridad TLS/mTLS, CloudEvents 1.0 tipados y validación de contratos JSON Schema. Inbox/outbox, retry/DLQ, protocolo de capacidades y OpenTelemetry forman parte de evoluciones posteriores.
+En producción, el mensaje se clasifica como no retryable mediante `INonRetryableError`; no se interpreta nunca como un payload métier válido.
