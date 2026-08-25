@@ -1,4 +1,5 @@
 using Net.Mqtt.ReactiveOrm.Models;
+using Net.Mqtt.ReactiveOrm.Security;
 
 namespace Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 
@@ -8,6 +9,7 @@ public interface IMqttBus : IAsyncDisposable
     bool IsReady { get; }
     bool WasSessionRestored { get; }
     event EventHandler<ConnectionStateChanged>? StateChanged;
+    event EventHandler<CertificateExpiringEvent>? CertificateExpiring;
     Task ConnectAsync(CancellationToken cancellationToken = default);
     Task DisconnectAsync(CancellationToken cancellationToken = default);
     IAsyncEnumerable<MqttDelivery> SubscribeAsync(MqttSubscription subscription, CancellationToken cancellationToken = default);

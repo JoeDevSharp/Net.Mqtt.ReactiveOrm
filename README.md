@@ -30,6 +30,7 @@ La biblioteca incluye:
 - Restauración automática de suscripciones cuando el broker no restaura la sesión.
 - Máquina de estados observable y señal de readiness.
 - Last Will CloudEvent `UNAVAILABLE`.
+- TLS/mTLS Zero Trust avec validation stricte et rotation de certificats.
 - Integración con Generic Host e inyección de dependencias.
 
 > La API 2.0 es incompatible con la API 1.x. Ya no existen `Publish()`, `Unsubscribe()`, constructores de contexto con host/puerto ni inicialización de propiedades mediante reflexión.
@@ -408,6 +409,110 @@ dotnet run --project Demo/Demo.csproj
 
 Detener con `Ctrl+C` para comprobar el cierre ordenado.
 
+## Seguridad TLS y mTLS
+
+La configuración mTLS aplica validación estricta. La cadena del certificado del broker debe ser confiable para el sistema operativo, el DNS/SAN debe coincidir con `ExpectedServerName`, el certificado debe estar vigente y la comprobación de revocación permanece activa.
+
+```csharp
+using Net.Mqtt.ReactiveOrm.Security;
+
+var certificateProvider = new PfxCertificateProvider(
+    "/run/secrets/equipment-worker.pfx",
+    Environment.GetEnvironmentVariable("MQTT_CERTIFICATE_PASSWORD"));
+
+builder.Services.AddMqttReactiveOrm(options =>
+{
+    options.ProtocolVersion = MqttProtocolVersion.V500;
+    options.Server = "mosquitto.enterprise.svc.internal";
+    options.Port = 8883;
+    options.ClientId = "enterprise-equipment-worker";
+
+    options.Security.UseMutualTls(mtls =>
+    {
+        mtls.ClientCertificateProvider = certificateProvider;
+        mtls.RequireTrustedServerCertificate = true;
+        mtls.CheckCertificateRevocation = true;
+        mtls.ExpectedServerName = "mosquitto.enterprise.svc.internal";
+        mtls.ExpectedClientIdentity = "enterprise-equipment-worker";
+        mtls.ExpirationWarningThreshold = TimeSpan.FromDays(30);
+        mtls.ExpirationCheckInterval = TimeSpan.FromHours(1);
+    });
+});
+```
+
+`ExpectedClientIdentity` vincula la identidad configurada del módulo con el DNS SAN o CN del certificado cliente. El certificado debe contener una clave privada y encontrarse dentro de su periodo de validez.
+
+Las opciones que desactivan la confianza o la revocación son rechazadas durante la validación:
+
+```csharp
+mtls.RequireTrustedServerCertificate = false; // Prohibido.
+mtls.CheckCertificateRevocation = false;      // Prohibido.
+```
+
+La biblioteca nunca habilita los equivalentes de:
+
+```text
+AllowUntrustedCertificates = true
+IgnoreCertificateChainErrors = true
+IgnoreCertificateRevocationErrors = true
+```
+
+### Proveedores de certificados
+
+Desde un archivo PFX:
+
+```csharp
+mtls.ClientCertificateProvider = new PfxCertificateProvider(
+    "/run/secrets/client.pfx",
+    password);
+```
+
+Desde archivos PEM:
+
+```csharp
+mtls.ClientCertificateProvider = new PemCertificateProvider(
+    "/run/secrets/client.crt",
+    "/run/secrets/client.key");
+```
+
+Desde el almacén de certificados. La clave privada se utiliza directamente y no necesita ser exportable:
+
+```csharp
+mtls.ClientCertificateProvider = new StoreCertificateProvider(
+    thumbprint,
+    StoreName.My,
+    StoreLocation.CurrentUser);
+```
+
+Desde un gestor de secretos o HSM mediante un resolver asíncrono:
+
+```csharp
+var provider = new SecretCertificateProvider(async cancellationToken =>
+    await secretStore.GetCertificateAsync("mqtt-client", cancellationToken));
+
+mtls.ClientCertificateProvider = provider;
+```
+
+Los proveedores PFX y PEM vigilan los archivos. Cuando Kubernetes, Docker Secrets u otro agente reemplaza el certificado, el bus recarga las credenciales y fuerza una reconexión ordenada. Para un proveedor de secretos, la integración debe señalar la rotación:
+
+```csharp
+provider.SignalRotation();
+```
+
+La expiración puede supervisarse desde el bus:
+
+```csharp
+bus.CertificateExpiring += (_, certificate) =>
+{
+    logger.LogWarning(
+        "El certificado {Thumbprint} expira en {Remaining}",
+        certificate.Thumbprint,
+        certificate.Remaining);
+};
+```
+
+Durante una rotación, `IsReady` deja de ser verdadero, la conexión pasa por `Draining` y solo vuelve a `Ready` después de autenticar el nuevo certificado y restaurar las suscripciones.
+
 ## Alcance de esta versión
 
-Esta versión implementa las extensiones de transporte inyectable, API asíncrona y ciclo de vida MQTT. Las capacidades de CloudEvents para todos los mensajes de aplicación, contratos y esquemas, inbox/outbox, retry/DLQ, protocolo de capacidades y OpenTelemetry forman parte de evoluciones posteriores.
+Esta versión implementa las extensiones de transporte inyectable, API asíncrona, ciclo de vida MQTT y seguridad TLS/mTLS. Las capacidades de CloudEvents para todos los mensajes de aplicación, contratos y esquemas, inbox/outbox, retry/DLQ, protocolo de capacidades y OpenTelemetry forman parte de evoluciones posteriores.

@@ -1,6 +1,7 @@
 using MQTTnet;
 using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using Net.Mqtt.ReactiveOrm.Models;
+using Net.Mqtt.ReactiveOrm.Security;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
@@ -16,6 +17,7 @@ public sealed class InMemoryMqttBus : IMqttBus
     public bool IsReady => State == ConnectionState.Ready;
     public bool WasSessionRestored => false;
     public event EventHandler<ConnectionStateChanged>? StateChanged;
+    public event EventHandler<CertificateExpiringEvent>? CertificateExpiring { add { } remove { } }
 
     public Task ConnectAsync(CancellationToken cancellationToken = default)
     {

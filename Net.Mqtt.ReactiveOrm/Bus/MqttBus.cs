@@ -2,6 +2,7 @@ using MQTTnet;
 using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using Net.Mqtt.ReactiveOrm.Enums;
 using Net.Mqtt.ReactiveOrm.Models;
+using Net.Mqtt.ReactiveOrm.Security;
 using System.Collections.Concurrent;
 using System.Buffers;
 using System.Runtime.CompilerServices;
@@ -13,45 +14,56 @@ namespace Net.Mqtt.ReactiveOrm.Bus;
 public sealed class MqttNetBus : IMqttBus
 {
     private readonly IMqttClient _client;
-    private readonly MqttClientOptions _options;
+    private MqttClientOptions _options = null!;
+    private readonly Func<CancellationToken, ValueTask<MqttClientOptions>> _optionsFactory;
     private readonly MqttReconnectOptions _reconnect;
     private readonly MqttLastWillOptions? _lastWill;
     private readonly string _clientId;
+    private readonly MutualTlsOptions? _mutualTls;
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
     private readonly CancellationTokenSource _lifetime = new();
     private readonly ConcurrentDictionary<Guid, Subscriber> _subscribers = new();
     private int _state = (int)ConnectionState.Created;
     private int _manualDisconnect;
     private Task? _reconnectTask;
+    private int _certificateRotation;
 
     public event EventHandler<ConnectionStateChanged>? StateChanged;
+    public event EventHandler<CertificateExpiringEvent>? CertificateExpiring;
     public bool IsReady => State == ConnectionState.Ready;
     public bool WasSessionRestored { get; private set; }
 
     public MqttNetBus(MqttReactiveOrmOptions options)
-        : this(new MqttClientFactory().CreateMqttClient(), options.BuildClientOptions(), options.Reconnect, options.LastWill, options.ClientId)
+        : this(new MqttClientFactory().CreateMqttClient(), options.BuildClientOptionsAsync, options.Reconnect, options.LastWill, options.ClientId, options.Security.MutualTls)
     {
     }
 
     public MqttNetBus(MqttClientOptions options)
-        : this(new MqttClientFactory().CreateMqttClient(), options, new MqttReconnectOptions(), null, options.ClientId)
+        : this(new MqttClientFactory().CreateMqttClient(), _ => ValueTask.FromResult(options), new MqttReconnectOptions(), null, options.ClientId, null)
     {
     }
 
     public MqttNetBus(IMqttClient client, MqttClientOptions options)
-        : this(client, options, new MqttReconnectOptions(), null, options.ClientId)
+        : this(client, _ => ValueTask.FromResult(options), new MqttReconnectOptions(), null, options.ClientId, null)
     {
     }
 
-    private MqttNetBus(IMqttClient client, MqttClientOptions options, MqttReconnectOptions reconnect, MqttLastWillOptions? lastWill, string clientId)
+    private MqttNetBus(IMqttClient client, Func<CancellationToken, ValueTask<MqttClientOptions>> optionsFactory,
+        MqttReconnectOptions reconnect, MqttLastWillOptions? lastWill, string clientId, MutualTlsOptions? mutualTls)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _optionsFactory = optionsFactory ?? throw new ArgumentNullException(nameof(optionsFactory));
         _reconnect = reconnect;
         _lastWill = lastWill;
         _clientId = clientId;
+        _mutualTls = mutualTls;
         _client.ApplicationMessageReceivedAsync += OnMessageAsync;
         _client.DisconnectedAsync += OnDisconnectedAsync;
+        if (_mutualTls is not null)
+        {
+            _mutualTls.ClientCertificateProvider.CertificateChanged += OnCertificateChanged;
+            _ = MonitorCertificateExpirationAsync(_lifetime.Token);
+        }
     }
 
     public ConnectionState State => (ConnectionState)Volatile.Read(ref _state);
@@ -66,6 +78,7 @@ public sealed class MqttNetBus : IMqttBus
             SetState(ConnectionState.Connecting);
             try
             {
+                _options = await _optionsFactory(cancellationToken).ConfigureAwait(false);
                 var result = await _client.ConnectAsync(_options, cancellationToken).ConfigureAwait(false);
                 WasSessionRestored = result.IsSessionPresent;
                 SetState(ConnectionState.Connected);
@@ -136,7 +149,9 @@ public sealed class MqttNetBus : IMqttBus
         await DisconnectAsync().ConfigureAwait(false);
         _client.ApplicationMessageReceivedAsync -= OnMessageAsync;
         _client.DisconnectedAsync -= OnDisconnectedAsync;
+        if (_mutualTls is not null) _mutualTls.ClientCertificateProvider.CertificateChanged -= OnCertificateChanged;
         _client.Dispose();
+        _mutualTls?.ClientCertificateProvider.Dispose();
         _lifetime.Cancel();
         _lifetime.Dispose();
         _lifecycle.Dispose();
@@ -230,6 +245,49 @@ public sealed class MqttNetBus : IMqttBus
     {
         var previous = (ConnectionState)Interlocked.Exchange(ref _state, (int)state);
         if (previous != state) StateChanged?.Invoke(this, new(previous, state, error));
+    }
+
+    private void OnCertificateChanged(object? sender, EventArgs args)
+    {
+        if (Interlocked.Exchange(ref _certificateRotation, 1) == 0)
+            _ = RotateCertificateAsync(_lifetime.Token);
+    }
+
+    private async Task RotateCertificateAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken).ConfigureAwait(false);
+            await DisconnectAsync(cancellationToken).ConfigureAwait(false);
+            await ConnectAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception error) { SetState(ConnectionState.Faulted, error); }
+        finally { Interlocked.Exchange(ref _certificateRotation, 0); }
+    }
+
+    private async Task MonitorCertificateExpirationAsync(CancellationToken cancellationToken)
+    {
+        if (_mutualTls is null) return;
+        using var timer = new PeriodicTimer(_mutualTls.ExpirationCheckInterval);
+        string? lastWarning = null;
+        try
+        {
+            do
+            {
+                var certificate = await _mutualTls.ClientCertificateProvider.GetCertificateAsync(cancellationToken).ConfigureAwait(false);
+                var remaining = certificate.NotAfter.ToUniversalTime() - DateTime.UtcNow;
+                if (remaining <= _mutualTls.ExpirationWarningThreshold && lastWarning != certificate.Thumbprint)
+                {
+                    lastWarning = certificate.Thumbprint;
+                    CertificateExpiring?.Invoke(this, new(certificate.Subject, certificate.Thumbprint,
+                        certificate.NotAfter.ToUniversalTime(), remaining));
+                }
+            }
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception error) { SetState(ConnectionState.Faulted, error); }
     }
 
     private sealed class SharedAcknowledgement(int remaining, Func<CancellationToken, Task> acknowledge)
