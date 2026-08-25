@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Net.Mqtt.ReactiveOrm.Bus;
 using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using Net.Mqtt.ReactiveOrm.Models;
+using Net.Mqtt.ReactiveOrm.CloudEvents;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +17,8 @@ public static class MqttReactiveOrmServiceCollectionExtensions
         configure(options);
         options.Validate();
         services.TryAddSingleton(options);
+        services.TryAddSingleton<ICloudEventFactory, CloudEventFactory>();
+        services.TryAddSingleton<ICloudEventCodec, JsonCloudEventCodec>();
         services.TryAddSingleton<IMqttBus>(provider => new MqttNetBus(provider.GetRequiredService<MqttReactiveOrmOptions>()));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, MqttReactiveOrmHostedService>());
         return services;

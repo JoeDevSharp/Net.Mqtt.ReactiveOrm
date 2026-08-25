@@ -1,16 +1,19 @@
 using Net.Mqtt.ReactiveOrm.Enums;
+using Net.Mqtt.ReactiveOrm.CloudEvents;
 
 namespace Net.Mqtt.ReactiveOrm.Models;
 
 public enum ConnectionState { Created, Connecting, Connected, Subscribing, Ready, Reconnecting, Draining, Stopped, Faulted }
 public sealed record ConnectionStateChanged(ConnectionState Previous, ConnectionState Current, Exception? Error = null);
 public sealed record MqttSubscription(string TopicFilter, QoSLevel QoS = QoSLevel.AtMostOnce, int Capacity = 128);
-public sealed record MqttPublication(string Topic, ReadOnlyMemory<byte> Payload, QoSLevel QoS = QoSLevel.AtMostOnce, bool Retain = false);
+public sealed record MqttPublication(string Topic, ReadOnlyMemory<byte> Payload, QoSLevel QoS = QoSLevel.AtMostOnce,
+    bool Retain = false, string? ContentType = null);
 public sealed record MqttDelivery(
     string Topic,
     ReadOnlyMemory<byte> Payload,
     QoSLevel QoS,
     bool Retain,
+    string? ContentType = null,
     Func<CancellationToken, Task>? Acknowledge = null)
 {
     public Task AcknowledgeAsync(CancellationToken cancellationToken = default) =>
@@ -23,6 +26,7 @@ public sealed record CloudEventPublishOptions
     public static CloudEventPublishOptions Default { get; } = new();
     public QoSLevel? QoS { get; init; }
     public bool? Retain { get; init; }
+    public CloudEventPublishContext Context { get; init; } = new();
 }
 
 public sealed record SubscriptionOptions
@@ -37,9 +41,10 @@ public sealed class MqttMessageContext<TData>
     private readonly Func<CancellationToken, Task> _acknowledge;
     private int _acknowledged;
 
-    internal MqttMessageContext(TData data, MqttDelivery delivery)
+    internal MqttMessageContext(CloudEventMessage<TData> cloudEvent, MqttDelivery delivery)
     {
-        Data = data;
+        CloudEvent = cloudEvent;
+        Data = cloudEvent.Data;
         Topic = delivery.Topic;
         QoS = delivery.QoS;
         Retain = delivery.Retain;
@@ -47,6 +52,8 @@ public sealed class MqttMessageContext<TData>
     }
 
     public TData Data { get; }
+    public CloudEventMessage<TData> CloudEvent { get; }
+    public CloudEventIdentity Identity => CloudEvent.Identity;
     public string Topic { get; }
     public QoSLevel QoS { get; }
     public bool Retain { get; }

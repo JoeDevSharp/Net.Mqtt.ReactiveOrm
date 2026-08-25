@@ -138,8 +138,10 @@ public sealed class MqttNetBus : IMqttBus
         await ConnectAsync(cancellationToken).ConfigureAwait(false);
         var message = new MqttApplicationMessageBuilder().WithTopic(publication.Topic)
             .WithPayload(publication.Payload.ToArray()).WithQualityOfServiceLevel((MQTTnet.Protocol.MqttQualityOfServiceLevel)publication.QoS)
-            .WithRetainFlag(publication.Retain).Build();
-        var result = await _client.PublishAsync(message, cancellationToken).ConfigureAwait(false);
+            .WithRetainFlag(publication.Retain);
+        if (_options.ProtocolVersion == MQTTnet.Formatter.MqttProtocolVersion.V500 && publication.ContentType is not null)
+            message.WithContentType(publication.ContentType);
+        var result = await _client.PublishAsync(message.Build(), cancellationToken).ConfigureAwait(false);
         return new(result.IsSuccess, result.ReasonString);
     }
 
@@ -172,7 +174,7 @@ public sealed class MqttNetBus : IMqttBus
 
         var acknowledgement = new SharedAcknowledgement(subscribers.Length, args.AcknowledgeAsync);
         var delivery = new MqttDelivery(message.Topic, message.Payload.ToArray(), (QoSLevel)message.QualityOfServiceLevel,
-            message.Retain, acknowledgement.AcknowledgeAsync);
+            message.Retain, message.ContentType, acknowledgement.AcknowledgeAsync);
         foreach (var subscriber in subscribers)
             await subscriber.Channel.Writer.WriteAsync(delivery).ConfigureAwait(false);
     }

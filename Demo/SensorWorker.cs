@@ -3,6 +3,7 @@ using Demo.Mqtt;
 using Microsoft.Extensions.Hosting;
 using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using Net.Mqtt.ReactiveOrm.Models;
+using Net.Mqtt.ReactiveOrm.CloudEvents;
 
 namespace Demo;
 
@@ -32,7 +33,17 @@ public sealed class SensorWorker(MqttContext context, IMqttBus bus) : Background
                     Humidity = 45,
                     Timestamp = DateTime.UtcNow
                 },
-                CloudEventPublishOptions.Default,
+                new CloudEventPublishOptions
+                {
+                    Context = new CloudEventPublishContext
+                    {
+                        Subject = "sensor-demo-01",
+                        Extensions = new CloudEventExtensions
+                        {
+                            CorrelationId = Guid.NewGuid().ToString("N")
+                        }
+                    }
+                },
                 stoppingToken);
 
             await consumer;

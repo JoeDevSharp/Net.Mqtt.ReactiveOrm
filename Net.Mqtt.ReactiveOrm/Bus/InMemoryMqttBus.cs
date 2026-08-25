@@ -56,7 +56,7 @@ public sealed class InMemoryMqttBus : IMqttBus
     {
         ArgumentNullException.ThrowIfNull(publication);
         await ConnectAsync(cancellationToken).ConfigureAwait(false);
-        var delivery = new MqttDelivery(publication.Topic, publication.Payload, publication.QoS, publication.Retain);
+        var delivery = new MqttDelivery(publication.Topic, publication.Payload, publication.QoS, publication.Retain, publication.ContentType);
         foreach (var subscriber in _subscribers.Values)
         {
             cancellationToken.ThrowIfCancellationRequested();

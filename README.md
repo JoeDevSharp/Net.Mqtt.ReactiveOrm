@@ -20,6 +20,7 @@ La biblioteca incluye:
 - `MqttOrmContext` sin construcción oculta del cliente MQTT.
 - Registro explícito de topics mediante `TopicModelBuilder`.
 - Publicación y consumo completamente asíncronos y cancelables.
+- CloudEvents 1.0 tipados en structured content mode JSON para todos los mensajes.
 - Consumo recomendado mediante `IAsyncEnumerable<MqttMessageContext<T>>`.
 - Compatibilidad con Reactive Extensions mediante `IObservable<T>`.
 - Canales acotados para aplicar backpressure.
@@ -70,7 +71,7 @@ public sealed class SensorReading
 }
 ```
 
-El codec predeterminado serializa los datos como JSON UTF-8. Puede sustituirse inyectando una implementación de `IMqttCodec` en el contexto.
+`TopicSet<TData>` representa exclusivamente el tipo de `data`. La biblioteca lo envuelve siempre en un CloudEvent 1.0 structured JSON mediante `ICloudEventFactory` e `ICloudEventCodec`. Un payload métier JSON sin envelope CloudEvents no es válido.
 
 ## 2. Registrar explícitamente el modelo de topics
 
@@ -81,6 +82,7 @@ using Net.Mqtt.ReactiveOrm;
 using Net.Mqtt.ReactiveOrm.Bus.Interfaces;
 using Net.Mqtt.ReactiveOrm.Enums;
 using Net.Mqtt.ReactiveOrm.Models;
+using Net.Mqtt.ReactiveOrm.CloudEvents;
 
 public sealed class ApplicationMqttContext(
     IMqttBus bus,
@@ -92,7 +94,11 @@ public sealed class ApplicationMqttContext(
         .Add<SensorReading>(
             nameof(SensorReadings),
             "factory/sensors/SensorReading/events",
-            QoSLevel.AtLeastOnce)
+            QoSLevel.AtLeastOnce,
+            cloudEvent: new CloudEventDescriptor(
+                Source: new Uri("urn:factory:equipment-worker"),
+                Type: "com.factory.sensor.reading.v1",
+                DataSchema: new Uri("urn:schema:factory:sensor-reading:v1")))
         .Build();
 }
 ```
@@ -212,6 +218,8 @@ public sealed class SensorWorker(
 `MqttMessageContext<T>` expone:
 
 - `Data`: objeto deserializado.
+- `CloudEvent`: envelope tipado completo.
+- `Identity`: identidad compuesta por `Source` e `Id`.
 - `Topic`: topic MQTT real que recibió el mensaje.
 - `QoS`: nivel de entrega.
 - `Retain`: indica si el mensaje fue entregado como retained.
@@ -230,7 +238,18 @@ await context.SensorReadings.PublishAsync(
         Temperature = 23.7,
         Humidity = 41.2
     },
-    CloudEventPublishOptions.Default,
+    new CloudEventPublishOptions
+    {
+        Context = new CloudEventPublishContext
+        {
+            Subject = "sensor-42",
+            Extensions = new CloudEventExtensions
+            {
+                CorrelationId = correlationId,
+                CausationId = causationId
+            }
+        }
+    },
     stoppingToken);
 ```
 
@@ -248,6 +267,61 @@ await context.SensorReadings.PublishAsync(
 ```
 
 `PublishAsync` propaga la cancelación y lanza una excepción si MQTTnet informa que la publicación no fue aceptada.
+
+## CloudEvents 1.0 tipados
+
+Todo mensaje aplicativo se transporta en structured content mode JSON. En MQTT 5 la publicación incluye:
+
+```text
+Content Type: application/cloudevents+json; charset=utf-8
+```
+
+MQTT 3.1.1 transporta exactamente el mismo JSON, pero el Content Type queda implícito porque esa versión del protocolo no dispone de la propiedad MQTT correspondiente.
+
+Ejemplo del payload MQTT generado:
+
+```json
+{
+  "specversion": "1.0",
+  "id": "626ce1a8f33b45a59501af313bc34fd2",
+  "source": "urn:factory:equipment-worker",
+  "type": "com.factory.sensor.reading.v1",
+  "subject": "sensor-42",
+  "time": "2026-08-25T08:57:24.5489680+00:00",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:schema:factory:sensor-reading:v1",
+  "correlationid": "production-order-9138",
+  "causationid": "command-2461",
+  "data": {
+    "sensorId": "sensor-42",
+    "temperature": 23.7,
+    "humidity": 41.2,
+    "timestamp": "2026-08-25T08:57:24.5489680Z"
+  }
+}
+```
+
+La fábrica construye y valida los atributos obligatorios:
+
+- `specversion`, siempre `1.0`;
+- `id`, generado automáticamente si no se proporciona;
+- `source` y `type`, declarados en `CloudEventDescriptor`;
+- `datacontenttype`, `application/json` de forma predeterminada;
+- `time`, usando la fecha de ocurrencia indicada o UTC actual;
+- `dataschema` para contratos gobernados;
+- `subject` para una entidad funcional concreta.
+
+Las extensiones comunes disponibles son `correlationid`, `causationid`, `traceparent`, `tracestate`, `negotiationid` y `expiresat`. `traceparent` y `tracestate` se obtienen automáticamente de `Activity.Current` cuando no se indican explícitamente. Los nombres de extensiones adicionales deben usar únicamente minúsculas ASCII y dígitos.
+
+Los atributos CloudEvents se escriben en el nivel superior y no se duplican dentro de `data`. Durante el consumo se validan antes de deserializar el dato funcional. Un payload desnudo, una versión diferente de `1.0` o un Content Type MQTT 5 diferente se rechazan.
+
+La identidad idempotente es siempre el par:
+
+```text
+source + id
+```
+
+Puede obtenerse mediante `message.Identity`. Nunca debe utilizarse `id` de forma aislada como clave global.
 
 ## 6. Compatibilidad reactiva
 
@@ -515,4 +589,4 @@ Durante una rotación, `IsReady` deja de ser verdadero, la conexión pasa por `D
 
 ## Alcance de esta versión
 
-Esta versión implementa las extensiones de transporte inyectable, API asíncrona, ciclo de vida MQTT y seguridad TLS/mTLS. Las capacidades de CloudEvents para todos los mensajes de aplicación, contratos y esquemas, inbox/outbox, retry/DLQ, protocolo de capacidades y OpenTelemetry forman parte de evoluciones posteriores.
+Esta versión implementa transporte inyectable, API asíncrona, ciclo de vida MQTT, seguridad TLS/mTLS y CloudEvents 1.0 tipados para todos los mensajes. La validación avanzada de contratos y esquemas, inbox/outbox, retry/DLQ, protocolo de capacidades y OpenTelemetry forman parte de evoluciones posteriores.
