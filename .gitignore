@@ -1,5 +1,5 @@
 **/.vs
 **/bin
 **/obj
-mosquitto/log/mosquitto.log
-mosquitto/data/mosquitto.db
+**/*.log
+**/*.db
