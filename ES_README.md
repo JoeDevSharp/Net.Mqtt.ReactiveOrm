@@ -2,24 +2,24 @@
 
 ## Presentación
 
-Net.Mqtt.Infrastructure es el SDK MQTT común para Worker Services .NET. Conserva una idea deliberadamente pequeña —`topic MQTT ↔ TopicSet<TData> ↔ flujo tipado`— y centraliza alrededor de ella las obligaciones de una mensajería de producción: conexión, seguridad, CloudEvents, contratos, validación, resiliencia y consumo controlado.
+Net.Mqtt.Infrastructure es el SDK MQTT común para Worker Services .NET. Conserva una idea deliberadamente pequeña —`topic MQTT ↔ TopicSet<TData> ↔ flujo tipado`— y centraliza alrededor de ella las obligaciones de una mensajería de producción: conexión, seguridad, CloudEvents, Event Entities, validación, resiliencia y consumo controlado.
 
 El objetivo de la API pública es que el código de negocio trabaje con `TData` y `MqttMessageContext<TData>`, no con clientes MQTTnet, bytes, cabeceras ni lógica de reconexión.
 
 ## Descripción
 
-La biblioteca se apoya en MQTTnet, pero no lo expone como dependencia del contexto de aplicación. Un único `IMqttBus` inyectable comparte la conexión dentro del Worker; `MqttOrmContext` declara el modelo de topics; y cada `TopicSet<TData>` publica y consume exclusivamente CloudEvents 1.0 validados contra el contrato asociado al tipo C#.
+La biblioteca se apoya en MQTTnet, pero no lo expone como dependencia del contexto de aplicación. Un único `IMqttBus` inyectable comparte la conexión dentro del Worker; `MqttOrmContext` declara el modelo de topics; y cada `TopicSet<TData>` publica y consume exclusivamente CloudEvents 1.0 validados mediante la Event Entity asociada al tipo C#.
 
 ```text
 Topic MQTT
   → transporte seguro y resiliente
   → CloudEvent 1.0
-  → contrato y JSON Schema
+  → Event Entity y JSON Schema
   → TopicSet<TData>
   → IAsyncEnumerable<MqttMessageContext<TData>>
 ```
 
-La configuración habitual utiliza un único punto de entrada fluent. La biblioteca registra internamente MQTTnet, CloudEvents, contratos, schemas, topics, validadores y ciclo de vida.
+La configuración habitual utiliza un único punto de entrada fluent. La biblioteca registra internamente MQTTnet, CloudEvents, Event Entities, schemas, topics, validadores y ciclo de vida.
 
 ## Propósito
 
@@ -39,10 +39,10 @@ La biblioteca está pensada para brokers MQTT internos, bridges controlados y co
 - [Flujo de publicación y consumo](#flujo-de-publicación-y-consumo)
 - [Presets](#presets)
 - [Referencia de la API fluent](#referencia-de-la-api-fluent)
-- [Paquetes contractuales generados](#paquetes-contractuales-generados)
+- [Paquetes de Event Entities generados](#paquetes-de-event-entities-generados)
 - [Topics dinámicos](#topics-dinámicos)
 - [CloudEvents](#cloudevents)
-- [Contratos y schemas](#contratos-y-schemas)
+- [Event Entities y schemas](#event-entities-y-schemas)
 - [TLS y mTLS](#tls-y-mtls)
 - [Ciclo de vida, sesiones y reconexión](#ciclo-de-vida-sesiones-y-reconexión)
 - [Errores y acknowledgements](#errores-y-acknowledgements)
@@ -60,7 +60,7 @@ La biblioteca centraliza las decisiones técnicas que de otro modo acabarían re
 | Resiliencia | Sesiones persistentes, reconexión y resuscripción |
 | Seguridad | TLS/mTLS estricto y rotación de certificados |
 | Envelope | CloudEvents 1.0 structured JSON obligatorio |
-| Contratos | Relación entre `type`, `dataschema`, versión y tipo C# |
+| Event Entities | Relación entre `type`, `dataschema`, versión y tipo C# |
 | Validación | Límites, campos prohibidos y perfil JSON Schema |
 | Topics | Separación entre publicación y filtro de suscripción |
 | Consumo | Cancelación, backpressure y acknowledgement explícito |
@@ -78,7 +78,7 @@ No es un broker ni un reemplazo de MQTTnet. Es una capa de aplicación que impon
 | Ciclo de vida | Máquina de estados, sesiones persistentes, reconexión con jitter, resuscripción y LWT |
 | TLS y mTLS | Confianza estricta del servidor, nombre esperado, revocación, identidad cliente y rotación |
 | CloudEvents tipado | Envelope 1.0 obligatorio; `TopicSet<TData>` representa únicamente `data` |
-| Contratos | Asociación única entre tipo C#, `type`, `dataschema` y versión |
+| Event Entities | Asociación única entre tipo C#, `type`, `dataschema` y versión |
 | Validación | Tamaño, campos prohibidos, perfil JSON común y subconjunto JSON Schema |
 | Modelo de topics | Diferencia explícita entre topic de publicación y filtro de suscripción |
 | Consumo controlado | `IAsyncEnumerable`, canal acotado, backpressure y acknowledgement después del procesamiento |
@@ -100,9 +100,19 @@ Requisitos:
 
 ## Inicio rápido
 
-### 1. Contrato de datos
+### 1. Event Entity
+
+Una **Event Entity** es el estándar de la biblioteca para representar en CLR los datos transportados por un CloudEvent. Su identidad y sus políticas se declaran exclusivamente mediante atributos en la propia clase.
 
 ```csharp
+[EventType("com.factory.sensor.reading.v1")]
+[DataSchema("urn:schema:factory:sensor-reading:v1")]
+[EventVersion("1.0.0")]
+[MaximumDataSize(16 * 1024)]
+[SchemaCompatibility(ContractCompatibility.SameMajor)]
+[CompatibleDataSchema("urn:schema:factory:sensor-reading:v1.1")]
+[ForbiddenField("password")]
+[ForbiddenField("secret")]
 public sealed class SensorReading
 {
     public required string SensorId { get; init; }
@@ -114,7 +124,7 @@ public sealed class SensorReading
 
 ### 2. Contexto MQTT
 
-El contexto solo declara sus topics. No construye conexiones ni registra contratos:
+El contexto solo declara sus topics. No construye conexiones ni registra Event Entities:
 
 ```csharp
 using Net.Mqtt.Infrastructure;
@@ -154,14 +164,8 @@ builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(mqtt =>
         .UseDevelopmentDefaults()
         .UseUnavailableLastWill();
 
-    mqtt.UseContracts(contracts =>
-        contracts.Add<SensorReading>(
-            eventType: "com.factory.sensor.reading.v1",
-            dataSchema: new Uri(
-                "urn:schema:factory:sensor-reading:v1"),
-            version: new Version(1, 0, 0),
-            maximumDataSize: 16 * 1024,
-            forbiddenFields: ["password", "secret"]));
+    mqtt.UseEventEntities(entities =>
+        entities.Add<SensorReading>());
 
     mqtt.UseSchemas(schemas => schemas.AddInline(
         uri: "urn:schema:factory:sensor-reading:v1",
@@ -193,7 +197,7 @@ Esta única llamada registra:
 - `MqttNetBus`;
 - `ITopicModel`;
 - `ICloudEventFactory` y `ICloudEventCodec`;
-- `IEventContractRegistry`;
+- `IEventEntityRegistry`;
 - resolutor, caché y validador JSON Schema;
 - `MqttContextDependencies`;
 - `ApplicationMqttContext`;
@@ -367,26 +371,21 @@ await context.SensorReadings.PublishAsync(reading,
 
 El SDK genera `specversion`, `id`, `source`, `type`, `datacontenttype`, `dataschema` y `time`. La identidad idempotente que expone el mensaje es el par `source + id`, nunca `id` por separado.
 
-### Contrato, versión y JSON Schema
+### Event Entity, versión y JSON Schema
 
 ```csharp
-mqtt.UseContracts(contracts => contracts.Add<SensorReading>(
-    eventType: "com.factory.sensor.reading.v1",
-    dataSchema: new Uri("urn:schema:factory:sensor-reading:v1"),
-    version: new Version(1, 0, 0),
-    compatibility: ContractCompatibility.SameMajor,
-    maximumDataSize: 16 * 1024,
-    forbiddenFields: ["password", "secret"],
-    compatibleSchemas:
-    [
-        new Uri("urn:schema:factory:sensor-reading:v1.1")
-    ]));
+mqtt.UseEventEntities(entities => entities.Add<SensorReading>());
 
 mqtt.UseSchemas(schemas => schemas.AddInline(
     "urn:schema:factory:sensor-reading:v1",
     SensorSchemas.ReadingV1,
     "1.0.0"));
 ```
+
+`EventType`, `DataSchema` y `EventVersion` son obligatorios. `MaximumDataSize`,
+`SchemaCompatibility`, `CompatibleDataSchema`, `ForbiddenField` y
+`ContractJsonMapper` son opcionales. `Add<T>()` lanza una excepción explícita
+que identifica el tipo y los atributos obligatorios ausentes o inválidos.
 
 La validación se ejecuta antes de publicar y después de recibir, pero antes de exponer `TData`.
 
@@ -410,22 +409,29 @@ El resolutor HTTP solo debe apuntar a un repositorio contractual confiable. La c
 ### Proyección explícita Protobuf → JSON
 
 ```csharp
-var mapper = new DelegateContractJsonMapper<GeneratedReading>(
-    value => GeneratedReadingJson.Serialize(value),
-    json => GeneratedReadingJson.Deserialize(json));
+[EventType("com.factory.sensor.reading.v1")]
+[DataSchema("urn:schema:factory:sensor-reading:v1")]
+[EventVersion("1.0.0")]
+[ContractJsonMapper(typeof(GeneratedReadingMapper))]
+public sealed partial class GeneratedReading;
 
-mqtt.UseContracts(contracts => contracts.Add<GeneratedReading>(
-    "com.factory.sensor.reading.v1",
-    new Uri("urn:schema:factory:sensor-reading:v1"),
-    new Version(1, 0, 0),
-    jsonMapper: mapper));
+public sealed class GeneratedReadingMapper : IContractJsonMapper
+{
+    public ReadOnlyMemory<byte> Serialize(object data, Type dataType) =>
+        GeneratedReadingJson.Serialize((GeneratedReading)data);
+
+    public object Deserialize(ReadOnlyMemory<byte> json, Type dataType) =>
+        GeneratedReadingJson.Deserialize(json);
+}
+
+mqtt.UseEventEntities(entities => entities.Add<GeneratedReading>());
 ```
 
 No se infiere una conversión Protobuf arbitraria: el paquete contractual gobierna la representación JSON que se valida y transporta.
 
 ### Topics estáticos y dinámicos
 
-Un topic estático se declara una sola vez en `[MqttTopic]`; el registro contractual aporta `type` y `dataschema`:
+Un topic estático se declara una sola vez en `[MqttTopic]`; el registro de Event Entities aporta `type` y `dataschema`:
 
 ```csharp
 [MqttTopic(
@@ -469,7 +475,7 @@ services.AddMqttReactiveOrm<TestMqttContext>(mqtt =>
     mqtt.UseInMemoryTransport()
         .ForModule("tests")
         .WithCloudEventSource("urn:tests:sensor-worker");
-    mqtt.UseContracts(RegisterContracts);
+    mqtt.UseEventEntities(RegisterEventEntities);
     mqtt.UseSchemas(RegisterSchemas);
 });
 ```
@@ -482,7 +488,7 @@ El mismo test puede resolver `TestMqttContext`, publicar y leer mediante la API 
 
 ```text
 TData
-  → resolver el contrato por tipo C#
+  → resolver la Event Entity por tipo C#
   → comprobar CloudEvent type + dataschema
   → serializar con el perfil JSON determinista
   → validar tamaño y campos prohibidos
@@ -524,7 +530,7 @@ Si existe una `Activity` activa, `traceparent` y `tracestate` se copian automát
 ```text
 MqttDelivery
   → validar Content Type y envelope CloudEvents
-  → resolver el contrato por CloudEvent type
+  → resolver la Event Entity por CloudEvent type
   → comprobar dataschema + versión + TData
   → validar límites y JSON Schema sobre data sin deserializarla
   → deserializar TData
@@ -604,7 +610,7 @@ services.AddMqttReactiveOrm<TestMqttContext>(mqtt =>
         .ForModule("tests")
         .WithCloudEventSource("urn:tests:worker");
 
-    mqtt.UseContracts(RegisterTestContracts);
+    mqtt.UseEventEntities(RegisterTestEventEntities);
     mqtt.UseSchemas(RegisterTestSchemas);
 });
 ```
@@ -623,10 +629,10 @@ Todos los métodos devuelven el mismo builder y pueden encadenarse:
 | `UseMqtt311()` | Activa el modo compatible MQTT 3.1.1 |
 | `ForModule(namespace)` | Limita todos los topics al namespace del módulo |
 | `WithCloudEventSource(uri)` | Define la identidad CloudEvents del productor |
-| `UseContracts(configure)` | Registra contratos manualmente |
+| `UseEventEntities(configure)` | Registra Event Entities declaradas mediante atributos |
 | `UseSchemas(configure)` | Registra schemas inline o resolutores adicionales |
 | `UseSchemaResolver(resolver, capacity)` | Añade resolución local/remota con caché limitada |
-| `UseContractPackage<T>()` | Importa contratos y schemas de un paquete generado |
+| `UseEventEntityPackage<T>()` | Importa Event Entities y schemas de un paquete generado |
 | `UsePersistentSession(expiry)` | Conserva sesión y suscripciones en el broker |
 | `UseExponentialReconnect(initial, maximum)` | Configura reconexión con jitter |
 | `UseUnavailableLastWill(topic)` | Configura el LWT CloudEvent retained |
@@ -648,24 +654,21 @@ mqtt.Advanced.Reconnect.MaximumAttempts = 20;
 mqtt.Advanced.Reconnect.MaximumDuration = TimeSpan.FromMinutes(15);
 ```
 
-La configuración se valida al registrar los servicios. `ConnectTo`, `IdentifyAs`, `ForModule`, `WithCloudEventSource`, al menos un contrato y su schema son necesarios para el transporte MQTT habitual.
+La configuración se valida al registrar los servicios. `ConnectTo`, `IdentifyAs`, `ForModule`, `WithCloudEventSource`, al menos una Event Entity y su schema son necesarios para el transporte MQTT habitual.
 
-## Paquetes contractuales generados
+## Paquetes de Event Entities generados
 
 Un paquete NuGet generado desde el metamodelo puede implementar:
 
 ```csharp
-public sealed class EquipmentContractPackage
-    : IMqttContractPackage
+public sealed class EquipmentEventEntityPackage
+    : IMqttEventEntityPackage
 {
     public void Register(
-        EventContractRegistryBuilder contracts,
+        EventEntityRegistryBuilder eventEntities,
         MqttSchemaBuilder schemas)
     {
-        contracts.Add<SensorReading>(
-            "com.factory.sensor.reading.v1",
-            new Uri("urn:schema:factory:sensor-reading:v1"),
-            new Version(1, 0, 0));
+        eventEntities.Add<SensorReading>();
 
         schemas.AddInline(
             "urn:schema:factory:sensor-reading:v1",
@@ -684,18 +687,18 @@ builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(
         .IdentifyAs("equipment-worker")
         .ForModule("factory")
         .WithCloudEventSource("urn:factory:equipment-worker")
-        .UseContractPackage<EquipmentContractPackage>()
+        .UseEventEntityPackage<EquipmentEventEntityPackage>()
         .UseProductionDefaults()
         .UseMutualTls(ConfigureMutualTls));
 ```
 
 Así, el Worker no repite `eventType`, `dataschema`, versión ni JSON Schema.
 
-También es posible descubrir tipos generados que tengan `[EventContract]`:
+También es posible descubrir Event Entities que tengan los atributos estándar:
 
 ```csharp
-mqtt.UseContracts(contracts =>
-    contracts.AddGeneratedContracts(
+mqtt.UseEventEntities(entities =>
+    entities.AddEventEntities(
         typeof(SensorReading).Assembly));
 ```
 
@@ -773,7 +776,7 @@ MQTT 3.1.1 transporta el mismo JSON con Content Type implícito.
 
 Extensiones disponibles: `correlationid`, `causationid`, `traceparent`, `tracestate`, `negotiationid` y `expiresat`.
 
-## Contratos y schemas
+## Event Entities y schemas
 
 Antes de publicar y antes de exponer `TData`, la biblioteca valida:
 
@@ -896,7 +899,7 @@ await foreach (var received in
 - No incluye broker, bridge, Kafka Connect ni acceso a Kafka.
 - No implementa todavía inbox, outbox, DLQ persistente ni protocolo de capacidades.
 - No deduplica automáticamente: expone `message.Identity` (`source + id`) para que una inbox transaccional pueda hacerlo.
-- No implementa el estándar JSON Schema completo; aplica el perfil documentado en [Contratos y schemas](#contratos-y-schemas).
+- No implementa el estándar JSON Schema completo; aplica el perfil documentado en [Event Entities y schemas](#event-entities-y-schemas).
 - No sustituye las ACL del broker: la política local previene errores, mientras Mosquitto conserva la autoridad final.
 - OpenTelemetry completo aún no está integrado; `traceparent` y `tracestate` sí se propagan en CloudEvents.
 

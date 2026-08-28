@@ -10,11 +10,11 @@ using Net.Mqtt.Infrastructure.Models;
 
 namespace Net.Mqtt.Infrastructure.Hosting;
 
-/// <summary>Defines imqtt contract package.</summary>
-public interface IMqttContractPackage
+/// <summary>Defines a package of attributed Event Entities and their schemas.</summary>
+public interface IMqttEventEntityPackage
 {
     /// <summary>Registers the register operation.</summary>
-    void Register(EventContractRegistryBuilder contracts, MqttSchemaBuilder schemas);
+    void Register(EventEntityRegistryBuilder eventEntities, MqttSchemaBuilder schemas);
 }
 
 /// <summary>Represents mqtt schema builder.</summary>
@@ -64,7 +64,7 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
 {
     private readonly IServiceCollection _services;
     private readonly MqttReactiveOrmOptions _mqtt = new() { ClientId = string.Empty };
-    private readonly EventContractRegistryBuilder _contracts = new();
+    private readonly EventEntityRegistryBuilder _eventEntities = new();
     private readonly MqttSchemaBuilder _schemas = new();
     private readonly MqttTopicPolicyOptions _topics = new()
     {
@@ -96,18 +96,18 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
     /// <summary>Executes the with cloud event source operation.</summary>
     public MqttReactiveOrmBuilder<TContext> WithCloudEventSource(string source)
     { _topics.CloudEventSource = new Uri(source, UriKind.Absolute); return this; }
-    /// <summary>Configures the use contracts operation.</summary>
-    public MqttReactiveOrmBuilder<TContext> UseContracts(Action<EventContractRegistryBuilder> configure)
-    { configure(_contracts); return this; }
+    /// <summary>Registers attributed Event Entity types.</summary>
+    public MqttReactiveOrmBuilder<TContext> UseEventEntities(Action<EventEntityRegistryBuilder> configure)
+    { configure(_eventEntities); return this; }
     /// <summary>Configures the use schemas operation.</summary>
     public MqttReactiveOrmBuilder<TContext> UseSchemas(Action<MqttSchemaBuilder> configure)
     { configure(_schemas); return this; }
     /// <summary>Configures the use schema resolver operation.</summary>
     public MqttReactiveOrmBuilder<TContext> UseSchemaResolver(IJsonSchemaResolver resolver, int cacheCapacity = 64)
     { _schemas.Use(resolver); _schemaCacheCapacity = cacheCapacity; return this; }
-    /// <summary>Configures the use contract package&lt;tpackage&gt; operation.</summary>
-    public MqttReactiveOrmBuilder<TContext> UseContractPackage<TPackage>() where TPackage : IMqttContractPackage, new()
-    { new TPackage().Register(_contracts, _schemas); return this; }
+    /// <summary>Registers an Event Entity package and its schemas.</summary>
+    public MqttReactiveOrmBuilder<TContext> UseEventEntityPackage<TPackage>() where TPackage : IMqttEventEntityPackage, new()
+    { new TPackage().Register(_eventEntities, _schemas); return this; }
     /// <summary>Configures the use persistent session operation.</summary>
     public MqttReactiveOrmBuilder<TContext> UsePersistentSession(TimeSpan expiry)
     { _mqtt.Session.CleanStart = false; _mqtt.Session.Expiry = expiry; return this; }
@@ -145,7 +145,7 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
     public MqttReactiveOrmBuilder<TContext> UseDevelopmentDefaults()
     {
         UseMqtt5();
-        // Development frequently changes contracts and wire formats. A clean session
+        // Development frequently changes Event Entities and wire formats. A clean session
         // prevents queued messages from an older build being dispatched to the new codec.
         _mqtt.Session.CleanStart = true;
         _mqtt.Session.Expiry = TimeSpan.Zero;
@@ -158,13 +158,13 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
         if (!_inMemory) _mqtt.Validate();
         if (string.IsNullOrWhiteSpace(_topics.ModuleNamespace)) throw new InvalidOperationException("ForModule() is required.");
         if (_topics.CloudEventSource.OriginalString == "urn:unset") throw new InvalidOperationException("WithCloudEventSource() is required.");
-        var registry = _contracts.Build();
+        var registry = _eventEntities.Build();
         var schemaResolver = new CachingJsonSchemaResolver(_schemas.Build(), _schemaCacheCapacity);
 
         _services.TryAddSingleton(_mqtt);
         _services.TryAddSingleton<ICloudEventFactory, CloudEventFactory>();
         _services.TryAddSingleton<ICloudEventCodec, JsonCloudEventCodec>();
-        _services.AddSingleton<IEventContractRegistry>(registry);
+        _services.AddSingleton<IEventEntityRegistry>(registry);
         _services.AddSingleton<IJsonSchemaResolver>(schemaResolver);
         _services.AddSingleton<IEventDataValidator, JsonSchemaEventDataValidator>();
         if (_inMemory) _services.TryAddSingleton<IMqttBus, InMemoryMqttBus>();

@@ -1,4 +1,4 @@
-// Imports the data contracts exchanged through CloudEvents.
+// Imports the Event Entities exchanged through CloudEvents.
 using Demo.Entities;
 // Imports the context that declares the application's typed TopicSet instances.
 using Demo.Mqtt;
@@ -31,36 +31,22 @@ builder.Services.AddMqttReactiveOrm<MqttContext>(mqtt =>
         // Declares an UNAVAILABLE Last Will CloudEvent for an ungraceful connection loss.
         .UseUnavailableLastWill();
 
-    // Associates each C# type with its governed CloudEvents identity.
+    // Registers each attributed Event Entity with its governed CloudEvents identity.
     // The registry contains no topics; they are declared once in MqttContext.
-    mqtt.UseContracts(contracts =>
+    mqtt.UseEventEntities(entities =>
     {
         // BS1 input: temperature and humidity telemetry produced by sensor1.
-        contracts.Add<Sensor1Telemetry>(
-            eventType: "com.factory.bs1.environment.input.v1",
-            dataSchema: new Uri("urn:schema:factory:bs1-environment-input:v1"),
-            version: new Version(1, 0, 0),
-            maximumDataSize: 16 * 1024);
+        entities.Add<Sensor1Telemetry>();
 
         // BS2 input: one binary fragment from the sensor2 video stream.
         // byte[] is serialized as Base64 inside the CloudEvent JSON data value.
-        contracts.Add<Sensor2VideoChunk>(
-            eventType: "com.factory.bs2.video.chunk.v1",
-            dataSchema: new Uri("urn:schema:factory:bs2-video-chunk:v1"),
-            version: new Version(1, 0, 0),
-            maximumDataSize: 256 * 1024);
+        entities.Add<Sensor2VideoChunk>();
 
         // BS1 output: an operational decision produced by Worker BS1 and BusinessServiceBs1.
-        contracts.Add<Bs1OperationalAssessment>(
-            eventType: "com.factory.bs1.operational-assessment.v1",
-            dataSchema: new Uri("urn:schema:factory:bs1-operational-assessment:v1"),
-            version: new Version(1, 0, 0));
+        entities.Add<Bs1OperationalAssessment>();
 
         // BS2 output: the result published after the video stream has been assembled.
-        contracts.Add<Bs2VideoResult>(
-            eventType: "com.factory.bs2.video-result.v1",
-            dataSchema: new Uri("urn:schema:factory:bs2-video-result:v1"),
-            version: new Version(1, 0, 0));
+        entities.Add<Bs2VideoResult>();
     });
 
     // Registers the JSON Schema associated with each dataschema above.

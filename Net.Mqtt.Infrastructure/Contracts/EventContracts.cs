@@ -14,17 +14,17 @@ public enum ContractCompatibility
     BackwardCompatible
 }
 
-/// <summary>Describes the governed relationship between an event type, schema, version, and CLR type.</summary>
+/// <summary>Describes the governed relationship between an Event Entity, its CloudEvents type, schema, and version.</summary>
 /// <param name="EventType">The CloudEvent type.</param>
 /// <param name="DataSchema">The canonical schema URI.</param>
-/// <param name="DataType">The generated CLR data type.</param>
+/// <param name="DataType">The CLR Event Entity type.</param>
 /// <param name="Version">The contract version.</param>
 /// <param name="Compatibility">The accepted compatibility policy.</param>
 /// <param name="MaximumDataSize">The maximum serialized data size in bytes.</param>
 /// <param name="ForbiddenFields">Fields that must not occur in data.</param>
 /// <param name="JsonMapper">An optional governed JSON mapper.</param>
 /// <param name="CompatibleSchemas">Additional schema URIs accepted for this contract.</param>
-public sealed record EventContractDescriptor(
+public sealed record EventEntityDescriptor(
     string EventType,
     Uri DataSchema,
     Type DataType,
@@ -35,13 +35,13 @@ public sealed record EventContractDescriptor(
     IContractJsonMapper? JsonMapper = null,
     IReadOnlySet<Uri>? CompatibleSchemas = null);
 
-/// <summary>Defines ievent contract registry.</summary>
-public interface IEventContractRegistry
+/// <summary>Resolves registered Event Entities by CloudEvents type or CLR type.</summary>
+public interface IEventEntityRegistry
 {
     /// <summary>Gets the get by event type operation.</summary>
-    EventContractDescriptor GetByEventType(string eventType);
+    EventEntityDescriptor GetByEventType(string eventType);
     /// <summary>Gets the get by data type operation.</summary>
-    EventContractDescriptor GetByDataType(Type dataType);
+    EventEntityDescriptor GetByDataType(Type dataType);
 }
 
 /// <summary>Defines icontract json mapper.</summary>
@@ -53,85 +53,195 @@ public interface IContractJsonMapper
     object Deserialize(ReadOnlyMemory<byte> json, Type dataType);
 }
 
-/// <summary>Declares contract metadata on a generated CLR event-data type.</summary>
-/// <param name="eventType">The CloudEvent type.</param>
-/// <param name="dataSchema">The absolute schema URI.</param>
-/// <param name="version">The contract version.</param>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false)]
-public sealed class EventContractAttribute(string eventType, string dataSchema, string version) : Attribute
+/// <summary>Declares the CloudEvents type associated with an Event Entity.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+public sealed class EventTypeAttribute(string eventType) : Attribute
 {
-    /// <summary>Gets event type.</summary>
+    /// <summary>Gets the CloudEvents type.</summary>
     public string EventType { get; } = eventType;
-    /// <summary>Gets data schema.</summary>
+}
+
+/// <summary>Declares the absolute CloudEvents dataschema URI associated with an Event Entity.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+public sealed class DataSchemaAttribute(string dataSchema) : Attribute
+{
+    /// <summary>Gets the absolute dataschema URI.</summary>
     public string DataSchema { get; } = dataSchema;
-    /// <summary>Gets version.</summary>
+}
+
+/// <summary>Declares the governed version associated with an Event Entity.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+public sealed class EventVersionAttribute(string version) : Attribute
+{
+    /// <summary>Gets the contract version.</summary>
     public string Version { get; } = version;
 }
 
-/// <summary>Represents event contract registry.</summary>
-public sealed class EventContractRegistry : IEventContractRegistry
+/// <summary>Declares the maximum serialized data size accepted for an Event Entity.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+public sealed class MaximumDataSizeAttribute(int bytes) : Attribute
 {
-    private readonly IReadOnlyDictionary<string, EventContractDescriptor> _byEventType;
-    private readonly IReadOnlyDictionary<Type, EventContractDescriptor> _byDataType;
+    /// <summary>Gets the maximum serialized data size in bytes.</summary>
+    public int Bytes { get; } = bytes;
+}
 
-    internal EventContractRegistry(IEnumerable<EventContractDescriptor> contracts)
+/// <summary>Declares the schema compatibility policy for an Event Entity.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+public sealed class SchemaCompatibilityAttribute(ContractCompatibility compatibility) : Attribute
+{
+    /// <summary>Gets the schema compatibility policy.</summary>
+    public ContractCompatibility Compatibility { get; } = compatibility;
+}
+
+/// <summary>Forbids a field anywhere in the serialized event data.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true, Inherited = false)]
+public sealed class ForbiddenFieldAttribute(string fieldName) : Attribute
+{
+    /// <summary>Gets the forbidden field name.</summary>
+    public string FieldName { get; } = fieldName;
+}
+
+/// <summary>Declares an additional dataschema URI accepted by an event contract.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true, Inherited = false)]
+public sealed class CompatibleDataSchemaAttribute(string dataSchema) : Attribute
+{
+    /// <summary>Gets the compatible dataschema URI.</summary>
+    public string DataSchema { get; } = dataSchema;
+}
+
+/// <summary>Declares the parameterless JSON mapper used by an Event Entity.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+public sealed class ContractJsonMapperAttribute(Type mapperType) : Attribute
+{
+    /// <summary>Gets the JSON mapper type.</summary>
+    public Type MapperType { get; } = mapperType;
+}
+
+/// <summary>Represents the registry of governed Event Entities.</summary>
+public sealed class EventEntityRegistry : IEventEntityRegistry
+{
+    private readonly IReadOnlyDictionary<string, EventEntityDescriptor> _byEventType;
+    private readonly IReadOnlyDictionary<Type, EventEntityDescriptor> _byDataType;
+
+    internal EventEntityRegistry(IEnumerable<EventEntityDescriptor> entities)
     {
-        var list = contracts.ToArray();
+        var list = entities.ToArray();
         _byEventType = list.ToDictionary(x => x.EventType, StringComparer.Ordinal);
         _byDataType = list.ToDictionary(x => x.DataType);
     }
 
     /// <summary>Gets the get by event type operation.</summary>
-    public EventContractDescriptor GetByEventType(string eventType) =>
+    public EventEntityDescriptor GetByEventType(string eventType) =>
         _byEventType.TryGetValue(eventType, out var contract) ? contract
-        : throw new UnknownEventContractException($"CloudEvent type '{eventType}' is not registered.");
+        : throw new UnknownEventEntityException($"CloudEvent type '{eventType}' is not registered as an Event Entity.");
 
     /// <summary>Gets the get by data type operation.</summary>
-    public EventContractDescriptor GetByDataType(Type dataType) =>
+    public EventEntityDescriptor GetByDataType(Type dataType) =>
         _byDataType.TryGetValue(dataType, out var contract) ? contract
-        : throw new UnknownEventContractException($"Data type '{dataType.FullName}' is not registered.");
+        : throw new UnknownEventEntityException($"Type '{dataType.FullName}' is not registered as an Event Entity.");
 }
 
-/// <summary>Represents event contract registry builder.</summary>
-public sealed class EventContractRegistryBuilder
+/// <summary>Builds a registry from attributed Event Entity types.</summary>
+public sealed class EventEntityRegistryBuilder
 {
-    private readonly List<EventContractDescriptor> _contracts = [];
+    private const int DefaultMaximumDataSize = 1024 * 1024;
+    private readonly List<EventEntityDescriptor> _entities = [];
 
-    /// <summary>Adds the add&lt;tdata&gt; operation.</summary>
-    public EventContractRegistryBuilder Add<TData>(string eventType, Uri dataSchema, Version version,
-        ContractCompatibility compatibility = ContractCompatibility.Exact, int maximumDataSize = 1024 * 1024,
-        IEnumerable<string>? forbiddenFields = null, IContractJsonMapper? jsonMapper = null,
-        IEnumerable<Uri>? compatibleSchemas = null)
+    /// <summary>Registers the Event Entity metadata declared on <typeparamref name="TData"/>.</summary>
+    /// <exception cref="InvalidOperationException">Required CloudEvents contract metadata is missing or invalid.</exception>
+    public EventEntityRegistryBuilder Add<TData>()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
-        if (!dataSchema.IsAbsoluteUri) throw new ArgumentException("Contract dataschema must be absolute.", nameof(dataSchema));
-        if (maximumDataSize <= 0) throw new ArgumentOutOfRangeException(nameof(maximumDataSize));
-        _contracts.Add(new(eventType, dataSchema, typeof(TData), version, compatibility, maximumDataSize,
-            forbiddenFields?.ToHashSet(StringComparer.Ordinal), jsonMapper,
-            compatibleSchemas?.ToHashSet()));
+        Add(typeof(TData));
         return this;
     }
 
-    /// <summary>Adds the add generated contracts operation.</summary>
-    public EventContractRegistryBuilder AddGeneratedContracts(Assembly assembly)
+    /// <summary>Discovers and registers attributed Event Entities from an assembly.</summary>
+    public EventEntityRegistryBuilder AddEventEntities(Assembly assembly)
     {
         foreach (var type in assembly.ExportedTypes)
-            if (type.GetCustomAttribute<EventContractAttribute>() is { } attribute)
-                Add(type, attribute);
+            if (HasContractMetadata(type))
+                Add(type);
         return this;
     }
 
     /// <summary>Creates the build operation.</summary>
-    public EventContractRegistry Build() => new(_contracts);
+    public EventEntityRegistry Build() => new(_entities);
 
-    private void Add(Type type, EventContractAttribute attribute)
+    private void Add(Type type)
     {
-        if (!Uri.TryCreate(attribute.DataSchema, UriKind.Absolute, out var schema))
-            throw new InvalidOperationException($"Generated contract '{type.FullName}' has an invalid dataschema URI.");
-        if (!Version.TryParse(attribute.Version, out var version))
-            throw new InvalidOperationException($"Generated contract '{type.FullName}' has an invalid version.");
-        _contracts.Add(new(attribute.EventType, schema, type, version));
+        var eventType = type.GetCustomAttribute<EventTypeAttribute>()?.EventType;
+        var dataSchema = type.GetCustomAttribute<DataSchemaAttribute>()?.DataSchema;
+        var versionText = type.GetCustomAttribute<EventVersionAttribute>()?.Version;
+        var missing = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(eventType)) missing.Add(nameof(EventTypeAttribute));
+        if (string.IsNullOrWhiteSpace(dataSchema)) missing.Add(nameof(DataSchemaAttribute));
+        if (string.IsNullOrWhiteSpace(versionText)) missing.Add(nameof(EventVersionAttribute));
+
+        if (missing.Count > 0)
+            throw new InvalidOperationException(
+                $"Event Entity '{type.FullName}' is missing required CloudEvents attributes: {string.Join(", ", missing)}.");
+
+        if (!Uri.TryCreate(dataSchema, UriKind.Absolute, out var schema))
+            throw new InvalidOperationException(
+                $"Event Entity '{type.FullName}' has an invalid {nameof(DataSchemaAttribute)} value '{dataSchema}'. An absolute URI is required.");
+        if (!Version.TryParse(versionText, out var version))
+            throw new InvalidOperationException(
+                $"Event Entity '{type.FullName}' has an invalid {nameof(EventVersionAttribute)} value '{versionText}'.");
+
+        var maximumDataSize = type.GetCustomAttribute<MaximumDataSizeAttribute>()?.Bytes ?? DefaultMaximumDataSize;
+        if (maximumDataSize <= 0)
+            throw new InvalidOperationException(
+                $"Event Entity '{type.FullName}' has an invalid {nameof(MaximumDataSizeAttribute)} value '{maximumDataSize}'. It must be greater than zero.");
+
+        var compatibility = type.GetCustomAttribute<SchemaCompatibilityAttribute>()?.Compatibility
+            ?? ContractCompatibility.Exact;
+        var forbiddenFields = type.GetCustomAttributes<ForbiddenFieldAttribute>()
+            .Select(attribute => attribute.FieldName)
+            .ToHashSet(StringComparer.Ordinal);
+        if (forbiddenFields.Any(string.IsNullOrWhiteSpace))
+            throw new InvalidOperationException(
+                $"Event Entity '{type.FullName}' has an empty {nameof(ForbiddenFieldAttribute)} value.");
+
+        var compatibleSchemas = new HashSet<Uri>();
+        foreach (var attribute in type.GetCustomAttributes<CompatibleDataSchemaAttribute>())
+        {
+            if (!Uri.TryCreate(attribute.DataSchema, UriKind.Absolute, out var compatibleSchema))
+                throw new InvalidOperationException(
+                    $"Event Entity '{type.FullName}' has an invalid {nameof(CompatibleDataSchemaAttribute)} value '{attribute.DataSchema}'. An absolute URI is required.");
+            compatibleSchemas.Add(compatibleSchema);
+        }
+
+        IContractJsonMapper? jsonMapper = null;
+        if (type.GetCustomAttribute<ContractJsonMapperAttribute>() is { } mapperAttribute)
+        {
+            if (!typeof(IContractJsonMapper).IsAssignableFrom(mapperAttribute.MapperType))
+                throw new InvalidOperationException(
+                    $"JSON mapper type '{mapperAttribute.MapperType.FullName}' declared by '{type.FullName}' must implement {nameof(IContractJsonMapper)}.");
+            try
+            {
+                jsonMapper = (IContractJsonMapper?)Activator.CreateInstance(mapperAttribute.MapperType);
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException(
+                    $"JSON mapper type '{mapperAttribute.MapperType.FullName}' declared by '{type.FullName}' must have an accessible parameterless constructor.", exception);
+            }
+        }
+
+        _entities.Add(new(eventType!, schema, type, version, compatibility, maximumDataSize,
+            forbiddenFields, jsonMapper, compatibleSchemas));
     }
+
+    private static bool HasContractMetadata(Type type) =>
+        type.IsDefined(typeof(EventTypeAttribute), false)
+        || type.IsDefined(typeof(DataSchemaAttribute), false)
+        || type.IsDefined(typeof(EventVersionAttribute), false)
+        || type.IsDefined(typeof(MaximumDataSizeAttribute), false)
+        || type.IsDefined(typeof(SchemaCompatibilityAttribute), false)
+        || type.IsDefined(typeof(ForbiddenFieldAttribute), false)
+        || type.IsDefined(typeof(CompatibleDataSchemaAttribute), false)
+        || type.IsDefined(typeof(ContractJsonMapperAttribute), false);
 }
 
 /// <summary>Defines inon retryable error.</summary>
@@ -150,7 +260,7 @@ public abstract class ContractValidationException : Exception, INonRetryableErro
     /// <summary>Gets is retryable.</summary>
     public bool IsRetryable => false;
 }
-/// <summary>Represents unknown event contract exception.</summary>
-public sealed class UnknownEventContractException(string message) : ContractValidationException(message);
+/// <summary>Represents an unknown or unregistered Event Entity.</summary>
+public sealed class UnknownEventEntityException(string message) : ContractValidationException(message);
 /// <summary>Represents contract mismatch exception.</summary>
 public sealed class ContractMismatchException(string message) : ContractValidationException(message);

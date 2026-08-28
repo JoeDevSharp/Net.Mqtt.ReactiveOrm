@@ -2,24 +2,24 @@
 
 PRESENTATION
 
-Net.Mqtt.Infrastructure is the common MQTT SDK for Worker Services .NET. It preserves a deliberately small idea -`topic MQTT ↔ TopicSet<TData> ↔ flujo tipado`- and centralizes around it the obligations of a production messaging: connection, security, CloudEvents, contracts, validation, resilience and controlled consumption.
+Net.Mqtt.Infrastructure is the common MQTT SDK for .NET Worker Services. It preserves a deliberately small idea—`MQTT topic ↔ TopicSet<TData> ↔ typed stream`—and centralizes production messaging concerns: connection, security, CloudEvents, Event Entities, validation, resilience, and controlled consumption.
 
 The goal of the public API is for the business code to work with `TData` and `MqttMessageContext<TData>`, not MQTTnet clients, bytes, headers, or reconnection logic.
 
 Description
 
-The library relies on MQTTnet, but does not expose it as a dependency of the application context. A single injectable `IMqttBus` shares the connection within the Worker; `MqttOrmContext` declares the topics model; and each `TopicSet<TData>` exclusively publishes and consumes CloudEvents 1.0 validated against the contract associated with type C#.
+The library relies on MQTTnet, but does not expose it as a dependency of the application context. A single injectable `IMqttBus` shares the connection within the Worker; `MqttOrmContext` declares the topic model; and each `TopicSet<TData>` publishes and consumes CloudEvents 1.0 validated through the Event Entity associated with its C# type.
 
 ```text
 Topic MQTT
   → transporte seguro y resiliente
   → CloudEvent 1.0
-  → contrato y JSON Schema
+  → Event Entity and JSON Schema
   → TopicSet<TData>
   → IAsyncEnumerable<MqttMessageContext<TData>>
 ```
 
-The usual configuration uses a single fluent entry point. The library internally records MQTTnet, CloudEvents, contracts, schemas, topics, validators and life cycle.
+The usual configuration uses a single fluent entry point. The library internally registers MQTTnet, CloudEvents, Event Entities, schemas, topics, validators, and lifecycle services.
 
 PURPOSE
 
@@ -39,10 +39,10 @@ Description
 - [Post and Consumption Flow](#post-and-consumption-flow)
 - [Presets](#presets)
 - [API fluent reference](#api-fluent-reference)
-- [Generated Contract Packages](#generated-contractual-contractual-packages)
+- [Generated Event Entity packages](#generated-event-entity-packages)
 - [Dynamic topics](#dynamic-topics)
 - [CloudEvents](#cloudevents)
-- [Contracts and schemas](#contracts-and-schemas)
+- [Event Entities and schemas](#event-entities-and-schemas)
 - [TLS and mTLS](#tls-y-mtls)
 - [Lifecycle, sessions and reconnection](#life-cycle-sessions-and-reconnection)
 - [Errors and acknowledgements](#errors-and-acknowledgements)
@@ -60,7 +60,7 @@ The library centralizes the technical decisions that would otherwise end up repe
 | Resilience | Persistent sessions, reconnection and resubscription |
 | Security | Strict TLS/mTLS and Certificate Rotation |
 | Envelope | CloudEvents 1.0 structured JSON required |
-| Contracts | Relationship between `type`, `dataschema`, version and type C# |
+| Event Entities | Relationship between `type`, `dataschema`, version, and C# type |
 | Validation | Limits, forbidden fields and JSON Schema profile |
 | Topics | Separation between post and subscription filter |
 | Consumption | Cancellation, backpressure and explicit acknowledgement |
@@ -78,7 +78,7 @@ Features
 | Lifecycle | State Machine, Persistent Sessions, Jitter Reconnect, Resubscribe and LWT |
 | TLS and mTLS | Strict server trust, expected name, revocation, client identity and rotation |
 | CloudEvents typed | Envelope 1.0 required; `TopicSet<TData>` represents `data` only |
-| Contracts | Unique association between type C#, `type`, `dataschema` and version |
+| Event Entities | Unique association between C# type, `type`, `dataschema`, and version |
 | Validation | Size, forbidden fields, common JSON profile and JSON Schema subset |
 | Topic Model | Explicit Difference Between Post Topic and Subscription Filter |
 | Controlled consumption | `IAsyncEnumerable`, bounded channel, backpressure and acknowledgement after processing |
@@ -100,9 +100,19 @@ Net 10
 
 Fast Home
 
-data contract
+### 1. Event Entity
+
+An **Event Entity** is the library standard for representing CloudEvent transport data in the CLR. Its identity and policies are declared exclusively through attributes on the class itself.
 
 ```csharp
+[EventType("com.factory.sensor.reading.v1")]
+[DataSchema("urn:schema:factory:sensor-reading:v1")]
+[EventVersion("1.0.0")]
+[MaximumDataSize(16 * 1024)]
+[SchemaCompatibility(ContractCompatibility.SameMajor)]
+[CompatibleDataSchema("urn:schema:factory:sensor-reading:v1.1")]
+[ForbiddenField("password")]
+[ForbiddenField("secret")]
 public sealed class SensorReading
 {
     public required string SensorId { get; init; }
@@ -114,7 +124,7 @@ public sealed class SensorReading
 
 ### 2. MQTT Context
 
-Context only declares its topics. Does not build connections or record contracts:
+The context only declares its topics. It does not build connections or register Event Entities:
 
 ```csharp
 using Net.Mqtt.Infrastructure;
@@ -154,14 +164,8 @@ builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(mqtt =>
         .UseDevelopmentDefaults()
         .UseUnavailableLastWill();
 
-    mqtt.UseContracts(contracts =>
-        contracts.Add<SensorReading>(
-            eventType: "com.factory.sensor.reading.v1",
-            dataSchema: new Uri(
-                "urn:schema:factory:sensor-reading:v1"),
-            version: new Version(1, 0, 0),
-            maximumDataSize: 16 * 1024,
-            forbiddenFields: ["password", "secret"]));
+    mqtt.UseEventEntities(entities =>
+        entities.Add<SensorReading>());
 
     mqtt.UseSchemas(schemas => schemas.AddInline(
         uri: "urn:schema:factory:sensor-reading:v1",
@@ -193,7 +197,7 @@ This single call records:
 - `MqttNetBus`;
 - `ITopicModel`;
 - `ICloudEventFactory` and `ICloudEventCodec`;
-- `IEventContractRegistry`;
+- `IEventEntityRegistry`;
 - JSON Schema resolver, cache and validator;
 - `MqttContextDependencies`;
 - `ApplicationMqttContext`;
@@ -367,26 +371,21 @@ await context.SensorReadings.PublishAsync(reading,
 
 The SDK generates `specversion`, `id`, `source`, `type`, `datacontenttype`, `dataschema` and `time`. The idempotent identity that the message exposes is the pair `source + id`, never `id` separately.
 
-### Contract, Version and JSON Schema
+### Event Entity, version, and JSON Schema
 
 ```csharp
-mqtt.UseContracts(contracts => contracts.Add<SensorReading>(
-    eventType: "com.factory.sensor.reading.v1",
-    dataSchema: new Uri("urn:schema:factory:sensor-reading:v1"),
-    version: new Version(1, 0, 0),
-    compatibility: ContractCompatibility.SameMajor,
-    maximumDataSize: 16 * 1024,
-    forbiddenFields: ["password", "secret"],
-    compatibleSchemas:
-    [
-        new Uri("urn:schema:factory:sensor-reading:v1.1")
-    ]));
+mqtt.UseEventEntities(entities => entities.Add<SensorReading>());
 
 mqtt.UseSchemas(schemas => schemas.AddInline(
     "urn:schema:factory:sensor-reading:v1",
     SensorSchemas.ReadingV1,
     "1.0.0"));
 ```
+
+`EventType`, `DataSchema`, and `EventVersion` are required. `MaximumDataSize`,
+`SchemaCompatibility`, `CompatibleDataSchema`, `ForbiddenField`, and
+`ContractJsonMapper` are optional. `Add<T>()` throws an explicit exception
+identifying the type and any missing or invalid required attributes.
 
 Validation runs before publishing and after receiving, but before exposing `TData`.
 
@@ -410,15 +409,22 @@ The HTTP resolver should only point to a trusted contractual repository. The cac
 ### Explicit Protobuf → JSON projection
 
 ```csharp
-var mapper = new DelegateContractJsonMapper<GeneratedReading>(
-    value => GeneratedReadingJson.Serialize(value),
-    json => GeneratedReadingJson.Deserialize(json));
+[EventType("com.factory.sensor.reading.v1")]
+[DataSchema("urn:schema:factory:sensor-reading:v1")]
+[EventVersion("1.0.0")]
+[ContractJsonMapper(typeof(GeneratedReadingMapper))]
+public sealed partial class GeneratedReading;
 
-mqtt.UseContracts(contracts => contracts.Add<GeneratedReading>(
-    "com.factory.sensor.reading.v1",
-    new Uri("urn:schema:factory:sensor-reading:v1"),
-    new Version(1, 0, 0),
-    jsonMapper: mapper));
+public sealed class GeneratedReadingMapper : IContractJsonMapper
+{
+    public ReadOnlyMemory<byte> Serialize(object data, Type dataType) =>
+        GeneratedReadingJson.Serialize((GeneratedReading)data);
+
+    public object Deserialize(ReadOnlyMemory<byte> json, Type dataType) =>
+        GeneratedReadingJson.Deserialize(json);
+}
+
+mqtt.UseEventEntities(entities => entities.Add<GeneratedReading>());
 ```
 
 An arbitrary Protobuf conversion is not inferred: the contractual package governs the JSON representation that is validated and transported.
@@ -469,7 +475,7 @@ services.AddMqttReactiveOrm<TestMqttContext>(mqtt =>
     mqtt.UseInMemoryTransport()
         .ForModule("tests")
         .WithCloudEventSource("urn:tests:sensor-worker");
-    mqtt.UseContracts(RegisterContracts);
+    mqtt.UseEventEntities(RegisterEventEntities);
     mqtt.UseSchemas(RegisterSchemas);
 });
 ```
@@ -482,7 +488,7 @@ Publication
 
 ```text
 TData
-  → resolver el contrato por tipo C#
+  → resolve the Event Entity by C# type
   → comprobar CloudEvent type + dataschema
   → serializar con el perfil JSON determinista
   → validar tamaño y campos prohibidos
@@ -524,7 +530,7 @@ Consumption
 ```text
 MqttDelivery
   → validar Content Type y envelope CloudEvents
-  → resolver el contrato por CloudEvent type
+  → resolve the Event Entity by CloudEvent type
   → comprobar dataschema + versión + TData
   → validar límites y JSON Schema sobre data sin deserializarla
   → deserializar TData
@@ -604,7 +610,7 @@ services.AddMqttReactiveOrm<TestMqttContext>(mqtt =>
         .ForModule("tests")
         .WithCloudEventSource("urn:tests:worker");
 
-    mqtt.UseContracts(RegisterTestContracts);
+    mqtt.UseEventEntities(RegisterTestEventEntities);
     mqtt.UseSchemas(RegisterTestSchemas);
 });
 ```
@@ -623,10 +629,10 @@ All methods return the same builder and can be chained:
 | `UseMqtt311()` | Activate MQTT 3.1.1 compatible mode |
 | `ForModule(namespace)` | Limit all topics to module namespace |
 | `WithCloudEventSource(uri)` | Defines the CloudEvents identity of the producer |
-| `UseContracts(configure)` | Register contracts manually |
+| `UseEventEntities(configure)` | Register Event Entities declared with attributes |
 | `UseSchemas(configure)` | Log inline schemas or additional solvers |
 | `UseSchemaResolver(resolver, capacity)` | Adds local/remote resolution with limited cache |
-| `UseContractPackage<T>()` | Import contracts and schematics from a generated package |
+| `UseEventEntityPackage<T>()` | Import Event Entities and schemas from a generated package |
 | `UsePersistentSession(expiry)` | Keep Broker Session and Subscriptions |
 | `UseExponentialReconnect(initial, maximum)` | Configure jitter reconnection |
 | `UseUnavailableLastWill(topic)` | Configure CloudEvent retained LWT |
@@ -648,24 +654,21 @@ mqtt.Advanced.Reconnect.MaximumAttempts = 20;
 mqtt.Advanced.Reconnect.MaximumDuration = TimeSpan.FromMinutes(15);
 ```
 
-The configuration is validated when registering the services. `ConnectTo`, `IdentifyAs`, `ForModule`, `WithCloudEventSource`, at least one contract and its schema are required for usual MQTT transport.
+Configuration is validated while registering services. `ConnectTo`, `IdentifyAs`, `ForModule`, `WithCloudEventSource`, at least one Event Entity, and its schema are required for normal MQTT transport.
 
-## Contract Packages Generated
+## Generated Event Entity packages
 
 A NuGet package generated from the metamodel can implement:
 
 ```csharp
-public sealed class EquipmentContractPackage
-    : IMqttContractPackage
+public sealed class EquipmentEventEntityPackage
+    : IMqttEventEntityPackage
 {
     public void Register(
-        EventContractRegistryBuilder contracts,
+        EventEntityRegistryBuilder eventEntities,
         MqttSchemaBuilder schemas)
     {
-        contracts.Add<SensorReading>(
-            "com.factory.sensor.reading.v1",
-            new Uri("urn:schema:factory:sensor-reading:v1"),
-            new Version(1, 0, 0));
+        eventEntities.Add<SensorReading>();
 
         schemas.AddInline(
             "urn:schema:factory:sensor-reading:v1",
@@ -684,18 +687,18 @@ builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(
         .IdentifyAs("equipment-worker")
         .ForModule("factory")
         .WithCloudEventSource("urn:factory:equipment-worker")
-        .UseContractPackage<EquipmentContractPackage>()
+        .UseEventEntityPackage<EquipmentEventEntityPackage>()
         .UseProductionDefaults()
         .UseMutualTls(ConfigureMutualTls));
 ```
 
 Thus, the Worker does not repeat `eventType`, `dataschema`, version or JSON Schema.
 
-It is also possible to discover generated types having `[EventContract]`:
+It is also possible to discover Event Entities carrying the standard attributes:
 
 ```csharp
-mqtt.UseContracts(contracts =>
-    contracts.AddGeneratedContracts(
+mqtt.UseEventEntities(entities =>
+    entities.AddEventEntities(
         typeof(SensorReading).Assembly));
 ```
 
@@ -773,7 +776,7 @@ MQTT 3.1.1 carries the same JSON with implicit Content Type.
 
 Extensions available: `correlationid`, `causationid`, `traceparent`, `tracestate`, `negotiationid` and `expiresat`.
 
-## Contracts and Schedules
+## Event Entities and schemas
 
 Before publishing and before exposing `TData`, the library validates:
 
@@ -896,7 +899,7 @@ Current Limits
 - Does not include broker, bridge, Kafka Connect or access to Kafka.
 - Does not yet implement inbox, outbox, persistent DLQ or capabilities protocol.
 - Does not automatically deduplicate: exposes `message.Identity` (`source + id`) so that a transactional inbox can do it.
-- Does not implement the full JSON Schema standard; applies the profile documented in [Contracts and Schemas](#contracts-and-schemas).
+- Does not implement the full JSON Schema standard; it applies the profile documented in [Event Entities and schemas](#event-entities-and-schemas).
 - Does not replace broker ACLs: local policy prevents errors, while Mosquitto retains final authority.
 - Full OpenTelemetry is not yet integrated; `traceparent` and `tracestate` do propagate in CloudEvents.
 

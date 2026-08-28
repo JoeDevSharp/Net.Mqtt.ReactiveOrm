@@ -11,12 +11,12 @@ using System.Runtime.CompilerServices;
 namespace Net.Mqtt.Infrastructure;
 
 /// <summary>Publishes and consumes validated CloudEvents whose data is of type <typeparamref name="T"/>.</summary>
-/// <typeparam name="T">The governed CloudEvent data type.</typeparam>
+/// <typeparam name="T">The governed Event Entity type.</typeparam>
 public sealed class TopicSet<T> : ITopicSet<T>
 {
     private readonly ICloudEventFactory _cloudEventFactory;
     private readonly ICloudEventCodec _cloudEventCodec;
-    private readonly IEventContractRegistry _contractRegistry;
+    private readonly IEventEntityRegistry _eventEntityRegistry;
     private readonly IEventDataValidator _dataValidator;
     /// <inheritdoc />
     public IMqttBus MqttBus { get; }
@@ -28,12 +28,12 @@ public sealed class TopicSet<T> : ITopicSet<T>
 
     /// <summary>Initializes a typed topic set from its transport and governed message services.</summary>
     public TopicSet(IMqttBus mqttBus, ICloudEventFactory cloudEventFactory, ICloudEventCodec cloudEventCodec,
-        IEventContractRegistry contractRegistry, IEventDataValidator dataValidator, TopicDefinition definition)
+        IEventEntityRegistry eventEntityRegistry, IEventDataValidator dataValidator, TopicDefinition definition)
     {
         MqttBus = mqttBus ?? throw new ArgumentNullException(nameof(mqttBus));
         _cloudEventFactory = cloudEventFactory ?? throw new ArgumentNullException(nameof(cloudEventFactory));
         _cloudEventCodec = cloudEventCodec ?? throw new ArgumentNullException(nameof(cloudEventCodec));
-        _contractRegistry = contractRegistry ?? throw new ArgumentNullException(nameof(contractRegistry));
+        _eventEntityRegistry = eventEntityRegistry ?? throw new ArgumentNullException(nameof(eventEntityRegistry));
         _dataValidator = dataValidator ?? throw new ArgumentNullException(nameof(dataValidator));
         Definition = definition ?? throw new ArgumentNullException(nameof(definition));
     }
@@ -48,8 +48,8 @@ public sealed class TopicSet<T> : ITopicSet<T>
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(options);
         var descriptor = Definition.CloudEvent ?? throw new InvalidOperationException("The TopicSet has no CloudEvent descriptor.");
-        var contract = _contractRegistry.GetByDataType(typeof(T));
-        EventContractGuard.EnsureCompatible(contract, descriptor.Type, descriptor.DataSchema, typeof(T));
+        var contract = _eventEntityRegistry.GetByDataType(typeof(T));
+        EventEntityGuard.EnsureCompatible(contract, descriptor.Type, descriptor.DataSchema, typeof(T));
         var cloudEvent = _cloudEventFactory.Create(data, descriptor, options.Context);
         var serializedData = contract.JsonMapper?.Serialize(data!, typeof(T)) ?? _cloudEventCodec.SerializeData(data);
         await ValidateDataAsync(contract, serializedData, cancellationToken).ConfigureAwait(false);
@@ -89,8 +89,8 @@ public sealed class TopicSet<T> : ITopicSet<T>
             {
                 throw new InvalidMqttCloudEventException(delivery.Topic, delivery.ContentType, error);
             }
-            var contract = _contractRegistry.GetByEventType(envelope.Type);
-            EventContractGuard.EnsureCompatible(contract, envelope.Type, envelope.DataSchema, typeof(T));
+            var contract = _eventEntityRegistry.GetByEventType(envelope.Type);
+            EventEntityGuard.EnsureCompatible(contract, envelope.Type, envelope.DataSchema, typeof(T));
             await ValidateDataAsync(contract, envelope.Data, cancellationToken).ConfigureAwait(false);
             var cloudEvent = contract.JsonMapper is null
                 ? _cloudEventCodec.Deserialize<T>(delivery.Payload, delivery.ContentType)
@@ -103,9 +103,9 @@ public sealed class TopicSet<T> : ITopicSet<T>
     public IAsyncEnumerable<MqttMessageContext<T>> ReadAllAsync(CancellationToken cancellationToken = default) =>
         ReadAllAsync(SubscriptionOptions.Default, cancellationToken);
 
-    private async ValueTask ValidateDataAsync(EventContractDescriptor contract, ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
+    private async ValueTask ValidateDataAsync(EventEntityDescriptor contract, ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
     {
-        var limits = EventContractGuard.ValidateLimits(contract, data);
+        var limits = EventEntityGuard.ValidateLimits(contract, data);
         if (!limits.IsValid) throw new EventDataValidationException(limits);
         var schema = await _dataValidator.ValidateAsync(contract.DataSchema, data, cancellationToken).ConfigureAwait(false);
         if (!schema.IsValid) throw new EventDataValidationException(schema);

@@ -40,24 +40,24 @@ public static class MqttReactiveOrmServiceCollectionExtensions
         configurePolicy(options);
         services.AddSingleton<ITopicModel>(provider =>
         {
-            var contracts = provider.GetRequiredService<IEventContractRegistry>();
+            var eventEntities = provider.GetRequiredService<IEventEntityRegistry>();
             return new TopicModelBuilder(new MqttTopicPolicy(options))
-                .AddAttributedContext<TContext>(contracts, options.CloudEventSource,
+                .AddAttributedContext<TContext>(eventEntities, options.CloudEventSource,
                     resolverType => provider.GetRequiredService(resolverType))
                 .Build();
         });
         return services;
     }
 
-    /// <summary>Adds the add mqtt event contracts operation.</summary>
-    public static IServiceCollection AddMqttEventContracts(this IServiceCollection services,
-        Action<EventContractRegistryBuilder> configureContracts, IJsonSchemaResolver schemaResolver, int schemaCacheCapacity = 64)
+    /// <summary>Adds the attributed MQTT Event Entities and their schema resolver.</summary>
+    public static IServiceCollection AddMqttEventEntities(this IServiceCollection services,
+        Action<EventEntityRegistryBuilder> configureEventEntities, IJsonSchemaResolver schemaResolver, int schemaCacheCapacity = 64)
     {
-        ArgumentNullException.ThrowIfNull(configureContracts);
+        ArgumentNullException.ThrowIfNull(configureEventEntities);
         ArgumentNullException.ThrowIfNull(schemaResolver);
-        var builder = new EventContractRegistryBuilder();
-        configureContracts(builder);
-        services.AddSingleton<IEventContractRegistry>(builder.Build());
+        var builder = new EventEntityRegistryBuilder();
+        configureEventEntities(builder);
+        services.AddSingleton<IEventEntityRegistry>(builder.Build());
         services.AddSingleton<IJsonSchemaResolver>(new CachingJsonSchemaResolver(schemaResolver, schemaCacheCapacity));
         services.AddSingleton<IEventDataValidator, JsonSchemaEventDataValidator>();
         return services;

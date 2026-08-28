@@ -3,9 +3,9 @@ using Net.Mqtt.Infrastructure.CloudEvents;
 
 namespace Net.Mqtt.Infrastructure.Contracts;
 
-internal static class EventContractGuard
+internal static class EventEntityGuard
 {
-    public static void EnsureCompatible(EventContractDescriptor contract, string eventType, Uri? dataSchema, Type dataType)
+    public static void EnsureCompatible(EventEntityDescriptor contract, string eventType, Uri? dataSchema, Type dataType)
     {
         if (!string.Equals(contract.EventType, eventType, StringComparison.Ordinal))
             throw new ContractMismatchException($"Event type '{eventType}' is not valid for CLR type '{dataType.FullName}'.");
@@ -16,7 +16,7 @@ internal static class EventContractGuard
             throw new ContractMismatchException($"Dataschema '{dataSchema}' is not compatible with contract '{contract.DataSchema}'.");
     }
 
-    public static ValidationResult ValidateLimits(EventContractDescriptor contract, ReadOnlyMemory<byte> data)
+    public static ValidationResult ValidateLimits(EventEntityDescriptor contract, ReadOnlyMemory<byte> data)
     {
         List<ValidationError> errors = [];
         if (data.Length > contract.MaximumDataSize)
@@ -29,7 +29,7 @@ internal static class EventContractGuard
         return errors.Count == 0 ? ValidationResult.Success : new(false, errors);
     }
 
-    private static bool IsSchemaCompatible(EventContractDescriptor contract, Uri candidate)
+    private static bool IsSchemaCompatible(EventEntityDescriptor contract, Uri candidate)
     {
         if (candidate == contract.DataSchema || contract.CompatibleSchemas?.Contains(candidate) == true) return true;
         if (contract.Compatibility == ContractCompatibility.Exact || !TryVersion(candidate, out var candidateVersion)) return false;
@@ -55,7 +55,7 @@ internal static class EventContractGuard
         if (value.ValueKind == JsonValueKind.Object)
             foreach (var property in value.EnumerateObject())
             {
-                if (forbidden.Contains(property.Name)) errors.Add(new($"{path}.{property.Name}", "Field is forbidden by the event contract."));
+                if (forbidden.Contains(property.Name)) errors.Add(new($"{path}.{property.Name}", "Field is forbidden by the Event Entity policy."));
                 FindForbidden(property.Value, $"{path}.{property.Name}", forbidden, errors);
             }
         else if (value.ValueKind == JsonValueKind.Array)

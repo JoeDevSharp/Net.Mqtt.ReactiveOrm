@@ -1,6 +1,12 @@
+using Net.Mqtt.Infrastructure.Contracts;
+
 namespace Demo.Entities;
 
 /// <summary>Represents environmental telemetry supplied by sensor1 to business process BS1.</summary>
+[EventType("com.factory.bs1.environment.input.v1")]
+[DataSchema("urn:schema:factory:bs1-environment-input:v1")]
+[EventVersion("1.0.0")]
+[MaximumDataSize(16 * 1024)]
 public sealed record Sensor1Telemetry
 {
     /// <summary>Gets the stable source identifier.</summary>
@@ -14,6 +20,10 @@ public sealed record Sensor1Telemetry
 }
 
 /// <summary>Represents one binary video fragment supplied by sensor2 to business process BS2.</summary>
+[EventType("com.factory.bs2.video.chunk.v1")]
+[DataSchema("urn:schema:factory:bs2-video-chunk:v1")]
+[EventVersion("1.0.0")]
+[MaximumDataSize(256 * 1024)]
 public sealed record Sensor2VideoChunk
 {
     /// <summary>Gets the camera identifier.</summary>
@@ -33,6 +43,9 @@ public sealed record Sensor2VideoChunk
 }
 
 /// <summary>Represents the operational decision produced by business service BS1.</summary>
+[EventType("com.factory.bs1.operational-assessment.v1")]
+[DataSchema("urn:schema:factory:bs1-operational-assessment:v1")]
+[EventVersion("1.0.0")]
 public sealed record Bs1OperationalAssessment
 {
     /// <summary>Gets the evaluated business area.</summary>
@@ -46,6 +59,9 @@ public sealed record Bs1OperationalAssessment
 }
 
 /// <summary>Represents the completed video-processing result produced by business service BS2.</summary>
+[EventType("com.factory.bs2.video-result.v1")]
+[DataSchema("urn:schema:factory:bs2-video-result:v1")]
+[EventVersion("1.0.0")]
 public sealed record Bs2VideoResult
 {
     /// <summary>Gets the processed stream identifier.</summary>

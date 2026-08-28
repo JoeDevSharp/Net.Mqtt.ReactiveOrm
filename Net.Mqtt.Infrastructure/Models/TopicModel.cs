@@ -124,12 +124,12 @@ public sealed class TopicModelBuilder(IMqttTopicPolicy policy)
 
     /// <summary>Adds the add attributed context&lt;tcontext&gt; operation.</summary>
     public TopicModelBuilder AddAttributedContext<TContext>(
-        IEventContractRegistry contracts,
+        IEventEntityRegistry eventEntities,
         Uri cloudEventSource,
         Func<Type, object>? resolverFactory = null) =>
         AddAttributedContext<TContext>(dataType =>
         {
-            var contract = contracts.GetByDataType(dataType);
+            var contract = eventEntities.GetByDataType(dataType);
             return new CloudEventDescriptor(cloudEventSource, contract.EventType, DataSchema: contract.DataSchema);
         }, resolverFactory);
 
