@@ -31,3 +31,23 @@
 1787583269: New connection from 172.19.0.1:44800 on port 1883.
 1787583269: New client connected from 172.19.0.1:44800 as a57a045b19cc4e798780018d4ff19e06 (p5, c1, k15).
 1787583274: Client a57a045b19cc4e798780018d4ff19e06 [172.19.0.1:44800] disconnected: connection closed by client.
+1787904904: mosquitto version 2.1.2 starting
+1787904904: Config loaded from /mosquitto/config/mosquitto.conf.
+1787904904: Bridge support available.
+1787904904: Persistence support available.
+1787904904: TLS support available.
+1787904904: TLS-PSK support available.
+1787904904: Websockets support available.
+1787904904: Opening ipv4 listen socket on port 1883.
+1787904904: Opening ipv6 listen socket on port 1883.
+1787904904: Opening ipv4 listen socket on port 9001.
+1787904904: Opening ipv6 listen socket on port 9001.
+1787904904: mosquitto version 2.1.2 running
+1787904918: New connection from 172.22.0.1:58264 on port 1883.
+1787904918: New client connected from 172.22.0.1:58264 as mqtt-explorer-671705bd (p4, c1, k60).
+1787904933: New connection from 172.22.0.1:47188 on port 1883.
+1787904933: New client connected from 172.22.0.1:47188 as business-workers-demo (p5, c1, k30).
+1787904980: Client business-workers-demo [172.22.0.1:47188] disconnected: connection closed by client.
+1787905177: Client mqtt-explorer-671705bd [172.22.0.1:58264] disconnected.
+1787905184: mosquitto version 2.1.2 terminating
+1787905184: Saving in-memory database to /mosquitto/data//mosquitto.db.

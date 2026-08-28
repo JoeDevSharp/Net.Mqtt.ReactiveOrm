@@ -15,6 +15,10 @@ public interface ITopicResolver<TData>
 /// <summary>Defines imqtt topic policy.</summary>
 public interface IMqttTopicPolicy
 {
+    /// <summary>Resolves a relative topic or filter against the configured base topic.</summary>
+    string ResolveTopic(string topic);
+    /// <summary>Removes the configured base topic from a resolved topic.</summary>
+    string ToRelativeTopic(string topic);
     /// <summary>Validates the validate definition operation.</summary>
     void ValidateDefinition(string? publishTopic, string subscribeFilter, CloudEventDescriptor descriptor, bool dynamic);
     /// <summary>Validates the validate resolved publish topic operation.</summary>
@@ -24,6 +28,8 @@ public interface IMqttTopicPolicy
 /// <summary>Represents mqtt topic policy options.</summary>
 public sealed class MqttTopicPolicyOptions
 {
+    /// <summary>Gets or sets the optional application-wide MQTT topic prefix.</summary>
+    public string? BaseTopic { get; set; }
     /// <summary>Gets or sets module namespace.</summary>
     public required string ModuleNamespace { get; set; }
     /// <summary>Gets or sets cloud event source.</summary>
@@ -38,6 +44,26 @@ public sealed class MqttTopicPolicyOptions
 /// <summary>Represents mqtt topic policy.</summary>
 public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopicPolicy
 {
+    /// <inheritdoc />
+    public string ResolveTopic(string topic)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(topic);
+        if (string.IsNullOrWhiteSpace(options.BaseTopic)) return topic;
+        return MqttTopicSyntax.Combine(options.BaseTopic, topic);
+    }
+
+    /// <inheritdoc />
+    public string ToRelativeTopic(string topic)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(topic);
+        if (string.IsNullOrWhiteSpace(options.BaseTopic)) return topic;
+        var prefix = options.BaseTopic.Trim('/');
+        if (topic.Equals(prefix, StringComparison.Ordinal)) return string.Empty;
+        return topic.StartsWith(prefix + "/", StringComparison.Ordinal)
+            ? topic[(prefix.Length + 1)..]
+            : topic;
+    }
+
     /// <summary>Validates the validate definition operation.</summary>
     public void ValidateDefinition(string? publishTopic, string subscribeFilter, CloudEventDescriptor descriptor, bool dynamic)
     {
@@ -71,7 +97,7 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
 
     private void ValidateNamespaceAndSensitiveData(string topic)
     {
-        var expected = options.ModuleNamespace.Trim('/');
+        var expected = ResolveTopic(options.ModuleNamespace.Trim('/'));
         if (!topic.Equals(expected, StringComparison.Ordinal) && !topic.StartsWith(expected + "/", StringComparison.Ordinal))
             throw new InvalidOperationException($"Topic '{topic}' is outside module namespace '{expected}'.");
         foreach (var segment in topic.Split('/'))
@@ -88,6 +114,8 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
     private void ValidateOptions()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(options.ModuleNamespace);
+        if (!string.IsNullOrWhiteSpace(options.BaseTopic))
+            MqttTopicSyntax.ValidatePublishTopic(options.BaseTopic.Trim('/'));
         if (!options.CloudEventSource.IsAbsoluteUri) throw new InvalidOperationException("CloudEventSource must be an absolute URI.");
     }
 }
@@ -95,6 +123,21 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
 /// <summary>Represents mqtt topic syntax.</summary>
 public static class MqttTopicSyntax
 {
+    /// <summary>Combines a base topic with a relative topic while merging shared boundary levels.</summary>
+    public static string Combine(string baseTopic, string topic)
+    {
+        var prefixLevels = baseTopic.Trim('/').Split('/');
+        var topicLevels = topic.Trim('/').Split('/');
+        var overlap = 0;
+        var maximum = Math.Min(prefixLevels.Length, topicLevels.Length);
+        for (var count = 1; count <= maximum; count++)
+        {
+            if (prefixLevels[^count..].SequenceEqual(topicLevels[..count], StringComparer.Ordinal))
+                overlap = count;
+        }
+        return string.Join('/', prefixLevels.Concat(topicLevels.Skip(overlap)));
+    }
+
     /// <summary>Validates the validate publish topic operation.</summary>
     public static void ValidatePublishTopic(string topic)
     {

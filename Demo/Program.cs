@@ -22,6 +22,8 @@ builder.Services.AddMqttReactiveOrm<MqttContext>(mqtt =>
     mqtt.ConnectTo("localhost", 1883)
         // Uses a stable ClientId so the broker can identify this instance.
         .IdentifyAs("business-workers-demo")
+        // Prefixes all relative [MqttTopic] publication and subscription addresses.
+        .WithBaseTopic("factory_64")
         // Restricts the topics declared by the context to the module namespace.
         .ForModule("factory_64")
         // Defines the CloudEvents source attribute for every published event.

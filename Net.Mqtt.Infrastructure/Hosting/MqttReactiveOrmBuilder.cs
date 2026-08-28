@@ -93,6 +93,9 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
     /// <summary>Executes the for module operation.</summary>
     public MqttReactiveOrmBuilder<TContext> ForModule(string moduleNamespace)
     { _topics.ModuleNamespace = moduleNamespace; return this; }
+    /// <summary>Prefixes every relative publish topic and subscription filter.</summary>
+    public MqttReactiveOrmBuilder<TContext> WithBaseTopic(string baseTopic)
+    { _topics.BaseTopic = baseTopic; return this; }
     /// <summary>Executes the with cloud event source operation.</summary>
     public MqttReactiveOrmBuilder<TContext> WithCloudEventSource(string source)
     { _topics.CloudEventSource = new Uri(source, UriKind.Absolute); return this; }

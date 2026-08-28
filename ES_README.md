@@ -136,8 +136,8 @@ public sealed class ApplicationMqttContext(
     : MqttOrmContext(dependencies)
 {
     [MqttTopic(
-        PublishTopic = "factory/sensors/readings/events",
-        SubscribeFilter = "factory/sensors/+/events",
+        PublishTopic = "sensors/readings/events",
+        SubscribeFilter = "sensors/+/events",
         QoS = MqttQoS.AtLeastOnce,
         Retain = false)]
     public TopicSet<SensorReading> SensorReadings =>
@@ -159,6 +159,7 @@ builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(mqtt =>
 {
     mqtt.ConnectTo("localhost", 1883)
         .IdentifyAs("equipment-worker")
+        .WithBaseTopic("factory")
         .ForModule("factory")
         .WithCloudEventSource("urn:factory:equipment-worker")
         .UseDevelopmentDefaults()
@@ -431,12 +432,29 @@ No se infiere una conversión Protobuf arbitraria: el paquete contractual gobier
 
 ### Topics estáticos y dinámicos
 
+`WithBaseTopic` permite que todos los valores de `[MqttTopic]` sean relativos. El prefijo se aplica tanto al publicar como al crear la suscripción:
+
+```csharp
+mqtt.ConnectTo(mqttHost, mqttPort)
+    .IdentifyAs(identity)
+    .WithBaseTopic("mint/v1.2.55/modules")
+    .ForModule("modules/mint_module_business1/services/mint_webservice_business1")
+    .WithCloudEventSource($"urn:mint_module_business1:{identity}");
+
+[MqttTopic(
+    PublishTopic = "mint_module_business1/services/mint_webservice_business1/events/created",
+    SubscribeFilter = "mint_module_business1/services/mint_webservice_business1/events/+")]
+public TopicSet<BusinessEvent> Events => Set<BusinessEvent>();
+```
+
+Los topics efectivos serán `mint/v1.2.55/modules/mint_module_business1/services/mint_webservice_business1/events/created` y `mint/v1.2.55/modules/mint_module_business1/services/mint_webservice_business1/events/+`. El resolutor elimina el solapamiento `modules/modules`, normaliza las barras y sigue validando que el resultado pertenezca al namespace configurado con `ForModule`.
+
 Un topic estático se declara una sola vez en `[MqttTopic]`; el registro de Event Entities aporta `type` y `dataschema`:
 
 ```csharp
 [MqttTopic(
-    PublishTopic = "factory/sensors/readings/events",
-    SubscribeFilter = "factory/sensors/+/events",
+    PublishTopic = "sensors/readings/events",
+    SubscribeFilter = "sensors/+/events",
     QoS = MqttQoS.AtLeastOnce)]
 public TopicSet<SensorReading> SensorReadings => Set<SensorReading>();
 ```
@@ -625,6 +643,7 @@ Todos los métodos devuelven el mismo builder y pueden encadenarse:
 |---|---|
 | `ConnectTo(server, port, transport)` | Configura TCP o WebSocket |
 | `IdentifyAs(clientId)` | Establece el ClientId estable |
+| `WithBaseTopic(topic)` | Prefija los topics de publicación y filtros de suscripción relativos |
 | `UseMqtt5()` | Selecciona MQTT 5 |
 | `UseMqtt311()` | Activa el modo compatible MQTT 3.1.1 |
 | `ForModule(namespace)` | Limita todos los topics al namespace del módulo |

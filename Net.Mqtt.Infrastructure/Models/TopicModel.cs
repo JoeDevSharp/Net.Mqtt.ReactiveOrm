@@ -41,16 +41,17 @@ public sealed record TopicDefinition
     /// <summary>Resolves the resolve publish topic&lt;tdata&gt; operation.</summary>
     public string ResolvePublishTopic<TData>(TData data)
     {
-        var topic = _resolver is ITopicResolver<TData> resolver
+        var relativeTopic = _resolver is ITopicResolver<TData> resolver
             ? resolver.ResolvePublishTopic(data)
             : PublishTopic ?? throw new InvalidOperationException("Dynamic topic definition has no compatible resolver.");
+        var topic = _policy.ResolveTopic(relativeTopic);
         _policy.ValidateResolvedPublishTopic(topic, CloudEvent);
         return topic;
     }
 
     /// <summary>Executes the matches subscription&lt;tdata&gt; operation.</summary>
     public bool MatchesSubscription<TData>(string topic) =>
-        _resolver is not ITopicResolver<TData> resolver || resolver.MatchesSubscription(topic);
+        _resolver is not ITopicResolver<TData> resolver || resolver.MatchesSubscription(_policy.ToRelativeTopic(topic));
 }
 
 /// <summary>Defines itopic model.</summary>
@@ -92,8 +93,10 @@ public sealed class TopicModelBuilder(IMqttTopicPolicy policy)
             throw new InvalidOperationException("An explicit CloudEventDescriptor is required; event type cannot be derived from TData.");
         CloudEventValidation.ValidateDescriptor(cloudEvent);
         var dynamic = resolver is not null;
-        policy.ValidateDefinition(publishTopic, subscribeFilter, cloudEvent, dynamic);
-        var definition = new TopicDefinition(publishTopic, subscribeFilter, qos, retain, cloudEvent, resolver, policy);
+        var resolvedPublishTopic = publishTopic is null ? null : policy.ResolveTopic(publishTopic);
+        var resolvedSubscribeFilter = policy.ResolveTopic(subscribeFilter);
+        policy.ValidateDefinition(resolvedPublishTopic, resolvedSubscribeFilter, cloudEvent, dynamic);
+        var definition = new TopicDefinition(resolvedPublishTopic, resolvedSubscribeFilter, qos, retain, cloudEvent, resolver, policy);
         if (!_topics.TryAdd((typeof(TData), setName), definition))
             throw new InvalidOperationException($"TopicSet '{setName}' for {typeof(TData).Name} is already registered.");
         return this;
@@ -141,8 +144,10 @@ public sealed class TopicModelBuilder(IMqttTopicPolicy policy)
     {
         if (resolver is not null && !typeof(ITopicResolver<>).MakeGenericType(dataType).IsInstanceOfType(resolver))
             throw new InvalidOperationException($"Resolver '{resolver.GetType()}' does not implement ITopicResolver<{dataType.Name}>.");
-        policy.ValidateDefinition(attribute.PublishTopic, attribute.SubscribeFilter, descriptor, resolver is not null);
-        if (!_topics.TryAdd((dataType, setName), new(attribute.PublishTopic, attribute.SubscribeFilter,
+        var publishTopic = attribute.PublishTopic is null ? null : policy.ResolveTopic(attribute.PublishTopic);
+        var subscribeFilter = policy.ResolveTopic(attribute.SubscribeFilter);
+        policy.ValidateDefinition(publishTopic, subscribeFilter, descriptor, resolver is not null);
+        if (!_topics.TryAdd((dataType, setName), new(publishTopic, subscribeFilter,
             (QoSLevel)attribute.QoS, attribute.Retain, descriptor, resolver, policy)))
             throw new InvalidOperationException($"TopicSet '{setName}' for {dataType.Name} is already registered.");
     }

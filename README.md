@@ -136,8 +136,8 @@ public sealed class ApplicationMqttContext(
     : MqttOrmContext(dependencies)
 {
     [MqttTopic(
-        PublishTopic = "factory/sensors/readings/events",
-        SubscribeFilter = "factory/sensors/+/events",
+        PublishTopic = "sensors/readings/events",
+        SubscribeFilter = "sensors/+/events",
         QoS = MqttQoS.AtLeastOnce,
         Retain = false)]
     public TopicSet<SensorReading> SensorReadings =>
@@ -159,6 +159,7 @@ builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(mqtt =>
 {
     mqtt.ConnectTo("localhost", 1883)
         .IdentifyAs("equipment-worker")
+        .WithBaseTopic("factory")
         .ForModule("factory")
         .WithCloudEventSource("urn:factory:equipment-worker")
         .UseDevelopmentDefaults()
@@ -431,12 +432,29 @@ An arbitrary Protobuf conversion is not inferred: the contractual package govern
 
 ### Static and dynamic topics
 
+`WithBaseTopic` lets every `[MqttTopic]` value remain relative. The prefix is applied to both publications and subscriptions:
+
+```csharp
+mqtt.ConnectTo(mqttHost, mqttPort)
+    .IdentifyAs(identity)
+    .WithBaseTopic("mint/v1.2.55/modules")
+    .ForModule("modules/mint_module_business1/services/mint_webservice_business1")
+    .WithCloudEventSource($"urn:mint_module_business1:{identity}");
+
+[MqttTopic(
+    PublishTopic = "mint_module_business1/services/mint_webservice_business1/events/created",
+    SubscribeFilter = "mint_module_business1/services/mint_webservice_business1/events/+")]
+public TopicSet<BusinessEvent> Events => Set<BusinessEvent>();
+```
+
+The effective addresses are `mint/v1.2.55/modules/mint_module_business1/services/mint_webservice_business1/events/created` and `mint/v1.2.55/modules/mint_module_business1/services/mint_webservice_business1/events/+`. Resolution merges the overlapping `modules/modules` boundary, normalizes slashes, and still verifies that the result belongs to the namespace configured by `ForModule`.
+
 A static topic is declared only once in `[MqttTopic]`; the contractual record provides `type` and `dataschema`:
 
 ```csharp
 [MqttTopic(
-    PublishTopic = "factory/sensors/readings/events",
-    SubscribeFilter = "factory/sensors/+/events",
+    PublishTopic = "sensors/readings/events",
+    SubscribeFilter = "sensors/+/events",
     QoS = MqttQoS.AtLeastOnce)]
 public TopicSet<SensorReading> SensorReadings => Set<SensorReading>();
 ```
@@ -625,6 +643,7 @@ All methods return the same builder and can be chained:
 |---|---|
 | `ConnectTo(server, port, transport)` | Configure TCP or WebSocket |
 | `IdentifyAs(clientId)` | Set ClientId stable |
+| `WithBaseTopic(topic)` | Prefix relative publication topics and subscription filters |
 | `UseMqtt5()` | Select MQTT 5 |
 | `UseMqtt311()` | Activate MQTT 3.1.1 compatible mode |
 | `ForModule(namespace)` | Limit all topics to module namespace |
