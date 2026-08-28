@@ -68,7 +68,8 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
     private readonly MqttSchemaBuilder _schemas = new();
     private readonly MqttTopicPolicyOptions _topics = new()
     {
-        ModuleNamespace = string.Empty,
+        ModuleIdentity = string.Empty,
+        ServiceIdentity = string.Empty,
         CloudEventSource = new Uri("urn:unset")
     };
     private bool _inMemory;
@@ -91,8 +92,11 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
     public MqttReactiveOrmBuilder<TContext> UseMqtt311()
     { _mqtt.ProtocolVersion = MqttProtocolVersion.V311; return this; }
     /// <summary>Executes the for module operation.</summary>
-    public MqttReactiveOrmBuilder<TContext> ForModule(string moduleNamespace)
-    { _topics.ModuleNamespace = moduleNamespace; return this; }
+    public MqttReactiveOrmBuilder<TContext> ForModule(string moduleIdentity)
+    { _topics.ModuleIdentity = moduleIdentity; return this; }
+    /// <summary>Sets the service identity used in the governed MQTT topic hierarchy.</summary>
+    public MqttReactiveOrmBuilder<TContext> ForService(string serviceIdentity)
+    { _topics.ServiceIdentity = serviceIdentity; return this; }
     /// <summary>Prefixes every relative publish topic and subscription filter.</summary>
     public MqttReactiveOrmBuilder<TContext> WithBaseTopic(string baseTopic)
     { _topics.BaseTopic = baseTopic; return this; }
@@ -159,7 +163,9 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
     internal void Register()
     {
         if (!_inMemory) _mqtt.Validate();
-        if (string.IsNullOrWhiteSpace(_topics.ModuleNamespace)) throw new InvalidOperationException("ForModule() is required.");
+        if (string.IsNullOrWhiteSpace(_topics.BaseTopic)) throw new InvalidOperationException("WithBaseTopic() is required.");
+        if (string.IsNullOrWhiteSpace(_topics.ModuleIdentity)) throw new InvalidOperationException("ForModule() is required.");
+        if (string.IsNullOrWhiteSpace(_topics.ServiceIdentity)) throw new InvalidOperationException("ForService() is required.");
         if (_topics.CloudEventSource.OriginalString == "urn:unset") throw new InvalidOperationException("WithCloudEventSource() is required.");
         var registry = _eventEntities.Build();
         var schemaResolver = new CachingJsonSchemaResolver(_schemas.Build(), _schemaCacheCapacity);
@@ -172,7 +178,10 @@ public sealed class MqttReactiveOrmBuilder<TContext> where TContext : MqttOrmCon
         _services.AddSingleton<IEventDataValidator, JsonSchemaEventDataValidator>();
         if (_inMemory) _services.TryAddSingleton<IMqttBus, InMemoryMqttBus>();
         else _services.TryAddSingleton<IMqttBus>(provider => new MqttNetBus(provider.GetRequiredService<MqttReactiveOrmOptions>()));
-        _services.AddSingleton<ITopicModel>(provider => new TopicModelBuilder(new MqttTopicPolicy(_topics))
+        var topicPolicy = new MqttTopicPolicy(_topics);
+        if (_mqtt.LastWill.Enabled)
+            _mqtt.LastWill.Topic = topicPolicy.ResolveTopic(_mqtt.LastWill.Topic ?? "availability");
+        _services.AddSingleton<ITopicModel>(provider => new TopicModelBuilder(topicPolicy)
             .AddAttributedContext<TContext>(registry, _topics.CloudEventSource,
                 resolverType => provider.GetRequiredService(resolverType)).Build());
         _services.TryAddSingleton<MqttContextDependencies>();

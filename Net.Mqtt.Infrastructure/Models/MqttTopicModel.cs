@@ -30,8 +30,10 @@ public sealed class MqttTopicPolicyOptions
 {
     /// <summary>Gets or sets the optional application-wide MQTT topic prefix.</summary>
     public string? BaseTopic { get; set; }
-    /// <summary>Gets or sets module namespace.</summary>
-    public required string ModuleNamespace { get; set; }
+    /// <summary>Gets or sets the module identity used as one MQTT topic level.</summary>
+    public required string ModuleIdentity { get; set; }
+    /// <summary>Gets or sets the service identity used as one MQTT topic level.</summary>
+    public required string ServiceIdentity { get; set; }
     /// <summary>Gets or sets cloud event source.</summary>
     public required Uri CloudEventSource { get; set; }
     /// <summary>Gets forbidden values.</summary>
@@ -48,16 +50,17 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
     public string ResolveTopic(string topic)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
-        if (string.IsNullOrWhiteSpace(options.BaseTopic)) return topic;
-        return MqttTopicSyntax.Combine(options.BaseTopic, topic);
+        var root = GetServiceRoot();
+        if (topic.Equals(root, StringComparison.Ordinal) || topic.StartsWith(root + "/", StringComparison.Ordinal))
+            return topic;
+        return $"{root}/{topic.Trim('/')}";
     }
 
     /// <inheritdoc />
     public string ToRelativeTopic(string topic)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
-        if (string.IsNullOrWhiteSpace(options.BaseTopic)) return topic;
-        var prefix = options.BaseTopic.Trim('/');
+        var prefix = GetServiceRoot();
         if (topic.Equals(prefix, StringComparison.Ordinal)) return string.Empty;
         return topic.StartsWith(prefix + "/", StringComparison.Ordinal)
             ? topic[(prefix.Length + 1)..]
@@ -97,7 +100,7 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
 
     private void ValidateNamespaceAndSensitiveData(string topic)
     {
-        var expected = ResolveTopic(options.ModuleNamespace.Trim('/'));
+        var expected = GetServiceRoot();
         if (!topic.Equals(expected, StringComparison.Ordinal) && !topic.StartsWith(expected + "/", StringComparison.Ordinal))
             throw new InvalidOperationException($"Topic '{topic}' is outside module namespace '{expected}'.");
         foreach (var segment in topic.Split('/'))
@@ -106,17 +109,43 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
                 throw new InvalidOperationException($"Topic '{topic}' contains forbidden or sensitive segment '{segment}'.");
             if (Guid.TryParse(segment, out _))
                 throw new InvalidOperationException($"Topic '{topic}' contains an instance identifier. Route by stable business topics instead.");
-            if (segment.Contains('.') && Uri.CheckHostName(segment) != UriHostNameType.Unknown)
+            if (segment.Contains('.') && !IsVersionSegment(segment) && Uri.CheckHostName(segment) != UriHostNameType.Unknown)
                 throw new InvalidOperationException($"Topic '{topic}' contains hostname-like segment '{segment}'.");
         }
     }
 
+    private static bool IsVersionSegment(string segment)
+    {
+        if (segment.Length < 2 || segment[0] is not ('v' or 'V')) return false;
+        var components = segment[1..].Split('.');
+        return components.Length >= 2
+            && components[0].All(char.IsAsciiDigit)
+            && components.All(component => component.Length > 0
+                && component.All(character => char.IsAsciiLetterOrDigit(character)
+                    || character is '-' or '_'));
+    }
+
     private void ValidateOptions()
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.ModuleNamespace);
-        if (!string.IsNullOrWhiteSpace(options.BaseTopic))
-            MqttTopicSyntax.ValidatePublishTopic(options.BaseTopic.Trim('/'));
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.BaseTopic);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.ModuleIdentity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.ServiceIdentity);
+        MqttTopicSyntax.ValidatePublishTopic(options.BaseTopic.Trim('/'));
+        ValidateIdentity(options.ModuleIdentity, nameof(options.ModuleIdentity));
+        ValidateIdentity(options.ServiceIdentity, nameof(options.ServiceIdentity));
         if (!options.CloudEventSource.IsAbsoluteUri) throw new InvalidOperationException("CloudEventSource must be an absolute URI.");
+    }
+
+    private string GetServiceRoot()
+    {
+        ValidateOptions();
+        return $"{options.BaseTopic!.Trim('/')}/moduls/{options.ModuleIdentity}/services/{options.ServiceIdentity}";
+    }
+
+    private static void ValidateIdentity(string identity, string parameterName)
+    {
+        if (identity.Contains('/') || identity.Contains('+') || identity.Contains('#') || identity.Contains('@'))
+            throw new InvalidOperationException($"{parameterName} must be one MQTT topic level without '/', '+', '#' or '@'.");
     }
 }
 

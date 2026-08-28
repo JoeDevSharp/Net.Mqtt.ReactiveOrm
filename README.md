@@ -161,6 +161,7 @@ builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(mqtt =>
         .IdentifyAs("equipment-worker")
         .WithBaseTopic("factory")
         .ForModule("factory")
+        .ForService("equipment-worker")
         .WithCloudEventSource("urn:factory:equipment-worker")
         .UseDevelopmentDefaults()
         .UseUnavailableLastWill();
@@ -437,17 +438,20 @@ An arbitrary Protobuf conversion is not inferred: the contractual package govern
 ```csharp
 mqtt.ConnectTo(mqttHost, mqttPort)
     .IdentifyAs(identity)
-    .WithBaseTopic("mint/v1.2.55/modules")
-    .ForModule("modules/mint_module_business1/services/mint_webservice_business1")
+    .WithBaseTopic("mint/v1.2.55")
+    .ForModule("mint_module_business1")
+    .ForService("mint_webservice_business1")
     .WithCloudEventSource($"urn:mint_module_business1:{identity}");
 
 [MqttTopic(
-    PublishTopic = "mint_module_business1/services/mint_webservice_business1/events/created",
-    SubscribeFilter = "mint_module_business1/services/mint_webservice_business1/events/+")]
+    PublishTopic = "events/created",
+    SubscribeFilter = "events/+")]
 public TopicSet<BusinessEvent> Events => Set<BusinessEvent>();
 ```
 
-The effective addresses are `mint/v1.2.55/modules/mint_module_business1/services/mint_webservice_business1/events/created` and `mint/v1.2.55/modules/mint_module_business1/services/mint_webservice_business1/events/+`. Resolution merges the overlapping `modules/modules` boundary, normalizes slashes, and still verifies that the result belongs to the namespace configured by `ForModule`.
+The effective addresses are `mint/v1.2.55/moduls/mint_module_business1/services/mint_webservice_business1/events/created` and `mint/v1.2.55/moduls/mint_module_business1/services/mint_webservice_business1/events/+`. The library builds the fixed `base/moduls/{module}/services/{service}` hierarchy, normalizes slashes, and validates that both identities are single MQTT levels.
+
+Version levels in the root may use `v` followed by dot-separated components, such as `v1.2.55` or `v0.0.0.a`. These values are not mistaken for hostnames; actual hostname-shaped levels remain forbidden.
 
 A static topic is declared only once in `[MqttTopic]`; the contractual record provides `type` and `dataschema`:
 
@@ -491,7 +495,9 @@ Rx is maintained for compatibility and simple flows. For workers, `ReadAllAsync`
 services.AddMqttReactiveOrm<TestMqttContext>(mqtt =>
 {
     mqtt.UseInMemoryTransport()
+        .WithBaseTopic("test")
         .ForModule("tests")
+        .ForService("sensor-worker")
         .WithCloudEventSource("urn:tests:sensor-worker");
     mqtt.UseEventEntities(RegisterEventEntities);
     mqtt.UseSchemas(RegisterSchemas);
@@ -625,7 +631,9 @@ It is not possible to disable server trust, string errors, or revocation.
 services.AddMqttReactiveOrm<TestMqttContext>(mqtt =>
 {
     mqtt.UseInMemoryTransport()
+        .WithBaseTopic("test")
         .ForModule("tests")
+        .ForService("worker")
         .WithCloudEventSource("urn:tests:worker");
 
     mqtt.UseEventEntities(RegisterTestEventEntities);
@@ -646,7 +654,8 @@ All methods return the same builder and can be chained:
 | `WithBaseTopic(topic)` | Prefix relative publication topics and subscription filters |
 | `UseMqtt5()` | Select MQTT 5 |
 | `UseMqtt311()` | Activate MQTT 3.1.1 compatible mode |
-| `ForModule(namespace)` | Limit all topics to module namespace |
+| `ForModule(identity)` | Set the module identity as one MQTT topic level |
+| `ForService(identity)` | Set the service identity as one MQTT topic level |
 | `WithCloudEventSource(uri)` | Defines the CloudEvents identity of the producer |
 | `UseEventEntities(configure)` | Register Event Entities declared with attributes |
 | `UseSchemas(configure)` | Log inline schemas or additional solvers |
@@ -704,7 +713,9 @@ builder.Services.AddMqttReactiveOrm<ApplicationMqttContext>(
     mqtt => mqtt
         .ConnectTo("mosquitto.enterprise.svc.internal", 8883)
         .IdentifyAs("equipment-worker")
+        .WithBaseTopic("factory")
         .ForModule("factory")
+        .ForService("equipment-worker")
         .WithCloudEventSource("urn:factory:equipment-worker")
         .UseEventEntityPackage<EquipmentEventEntityPackage>()
         .UseProductionDefaults()

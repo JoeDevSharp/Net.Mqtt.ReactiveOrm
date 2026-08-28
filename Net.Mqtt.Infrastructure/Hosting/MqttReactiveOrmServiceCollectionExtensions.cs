@@ -34,7 +34,8 @@ public static class MqttReactiveOrmServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configurePolicy);
         var options = new MqttTopicPolicyOptions
         {
-            ModuleNamespace = string.Empty,
+            ModuleIdentity = string.Empty,
+            ServiceIdentity = string.Empty,
             CloudEventSource = new Uri("urn:unset")
         };
         configurePolicy(options);

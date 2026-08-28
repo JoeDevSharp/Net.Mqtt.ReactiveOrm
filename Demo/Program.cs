@@ -24,8 +24,9 @@ builder.Services.AddMqttReactiveOrm<MqttContext>(mqtt =>
         .IdentifyAs("business-workers-demo")
         // Prefixes all relative [MqttTopic] publication and subscription addresses.
         .WithBaseTopic("factory_64")
-        // Restricts the topics declared by the context to the module namespace.
-        .ForModule("factory_64")
+        // Places every topic under factory_64/moduls/factory/services/business-workers.
+        .ForModule("factory")
+        .ForService("business-workers")
         // Defines the CloudEvents source attribute for every published event.
         .WithCloudEventSource("urn:factory:business-workers")
         // Enables MQTT 5, a clean session, and fast reconnection for local development.
