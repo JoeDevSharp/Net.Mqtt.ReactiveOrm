@@ -75,3 +75,23 @@ public sealed record Bs2VideoResult
     /// <summary>Gets the completion time.</summary>
     public DateTimeOffset CompletedAt { get; init; }
 }
+
+/// <summary>Represents a request used to demonstrate correlated MQTT request/reply.</summary>
+[EventType("com.factory.demo.simple-message.request.v1")]
+[DataSchema("urn:schema:factory:demo-simple-message-request:v1")]
+[EventVersion("1.0.0")]
+public sealed record SimpleMessage
+{
+    /// <summary>Gets the request text.</summary>
+    public required string Message { get; init; }
+}
+
+/// <summary>Represents the correlated response to a <see cref="SimpleMessage"/>.</summary>
+[EventType("com.factory.demo.simple-message.response.v1")]
+[DataSchema("urn:schema:factory:demo-simple-message-response:v1")]
+[EventVersion("1.0.0")]
+public sealed record SimpleMessageResponse
+{
+    /// <summary>Gets the response text.</summary>
+    public required string Response { get; init; }
+}

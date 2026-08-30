@@ -34,7 +34,15 @@ public sealed record ConnectionStateChanged(ConnectionState Previous, Connection
 /// <param name="TopicFilter">The MQTT subscription filter.</param>
 /// <param name="QoS">The requested quality of service.</param>
 /// <param name="Capacity">The bounded delivery buffer capacity.</param>
-public sealed record MqttSubscription(string TopicFilter, QoSLevel QoS = QoSLevel.AtMostOnce, int Capacity = 128);
+public sealed record MqttSubscription(string TopicFilter, QoSLevel QoS = QoSLevel.AtMostOnce, int Capacity = 128)
+{
+    private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>Waits until the transport has installed and confirmed the subscription.</summary>
+    public Task WaitUntilReadyAsync(CancellationToken cancellationToken = default) =>
+        _ready.Task.WaitAsync(cancellationToken);
+    internal void MarkReady() => _ready.TrySetResult();
+    internal void MarkFailed(Exception exception) => _ready.TrySetException(exception);
+}
 /// <summary>Describes an encoded MQTT publication.</summary>
 /// <param name="Topic">The concrete publication topic.</param>
 /// <param name="Payload">The encoded payload.</param>

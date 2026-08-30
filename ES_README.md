@@ -478,6 +478,44 @@ await foreach (var message in context.SensorReadings.ReadAllAsync(
 
 El canal acotado frena la lectura cuando el consumidor se retrasa. Si el handler falla, no se ejecuta el acknowledgement y MQTT puede volver a entregar el mensaje según su QoS y sesión.
 
+### HTTP → MQTT request/reply
+
+El contexto puede declarar un dispatcher request/reply compartido:
+
+```csharp
+using Net.Mqtt.Infrastructure.RequestReply;
+
+public MqttRequestSet<SimpleMessage, SempleMessageResponse> SimpleMessageRequest =>
+    Request<SimpleMessage, SempleMessageResponse>(
+        nameof(SempleMessage),
+        nameof(SempleMessageResponse));
+```
+
+Los argumentos son los nombres de las dos propiedades `TopicSet<T>` del contexto. El endpoint HTTP queda reducido a una operación:
+
+```csharp
+var response = await context.SimpleMessageRequest.SendAsync(
+    new SimpleMessage { Message = message },
+    new MqttRequestOptions { Timeout = TimeSpan.FromSeconds(10) },
+    cancellationToken);
+
+return Results.Ok(response.Data);
+```
+
+La librería crea el `correlationid`, instala una única suscripción compartida, espera el `SUBACK`, publica, despacha la respuesta al caller correcto y ejecuta su ACK. Las peticiones HTTP concurrentes no crean una suscripción MQTT cada una.
+
+El Worker respondedor puede copiar automáticamente correlación, causación y tracing:
+
+```csharp
+protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+    context.SimpleMessageRequest.HandleAsync(
+        (request, cancellationToken) => Task.FromResult(
+            new SempleMessageResponse { Response = "OK" }),
+        stoppingToken);
+```
+
+El timeout produce `MqttRequestTimeoutException`. El endpoint no gestiona `MoveNextAsync` ni `DisposeAsync`.
+
 ### Compatibilidad reactiva
 
 ```csharp
@@ -947,6 +985,22 @@ mqtt.Advanced.Reconnect.MaximumAttempts = 20;
 También permanecen disponibles las extensiones de registro de bajo nivel para integraciones especiales.
 
 ## Demo
+
+El proyecto `DemoApiExpose` muestra el puente HTTP → MQTT request/reply con dos estilos ASP.NET Core: controller y Minimal API. Usa el transporte in-memory por defecto:
+
+```bash
+dotnet run --project DemoApiExpose/DemoApiExpose.csproj --urls http://localhost:5080
+```
+
+Endpoints: `POST /api/controller/messages` y `POST /api/minimal/messages`, ambos con body `{ "message": "hello" }`.
+
+Para verificar sin broker el flujo completo, incluido request/reply con tres solicitudes concurrentes y correlación automática:
+
+```bash
+dotnet run --project Demo/Demo.csproj -- --in-memory
+```
+
+La salida confirma `ACK:alpha`, `ACK:beta` y `ACK:gamma` con un `correlationid` distinto para cada petición.
 
 Iniciar Mosquitto:
 

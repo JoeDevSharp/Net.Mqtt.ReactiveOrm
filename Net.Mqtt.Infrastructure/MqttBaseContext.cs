@@ -3,6 +3,7 @@ using Net.Mqtt.Infrastructure.Interfaces;
 using Net.Mqtt.Infrastructure.Models;
 using Net.Mqtt.Infrastructure.CloudEvents;
 using Net.Mqtt.Infrastructure.Contracts;
+using Net.Mqtt.Infrastructure.RequestReply;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
@@ -33,6 +34,7 @@ public abstract class MqttOrmContext
     private readonly IEventEntityRegistry? _eventEntityRegistry;
     private readonly IEventDataValidator? _dataValidator;
     private readonly ConcurrentDictionary<(Type, string), object> _sets = new();
+    private readonly ConcurrentDictionary<(Type, string, Type, string), object> _requests = new();
 
     /// <summary>Executes the mqtt orm context operation.</summary>
     protected MqttOrmContext(MqttContextDependencies dependencies)
@@ -61,4 +63,14 @@ public abstract class MqttOrmContext
                 _eventEntityRegistry ?? throw new InvalidOperationException("IEventEntityRegistry is required."),
                 _dataValidator ?? throw new InvalidOperationException("IEventDataValidator is required."),
                 _model.GetTopic(typeof(TData), setName)));
+
+    /// <summary>Creates or returns a shared MQTT request/reply dispatcher for two named TopicSet properties.</summary>
+    protected MqttRequestSet<TRequest, TResponse> Request<TRequest, TResponse>(
+        string requestSetName,
+        string responseSetName) =>
+        (MqttRequestSet<TRequest, TResponse>)_requests.GetOrAdd(
+            (typeof(TRequest), requestSetName, typeof(TResponse), responseSetName),
+            _ => new MqttRequestSet<TRequest, TResponse>(
+                Set<TRequest>(requestSetName),
+                Set<TResponse>(responseSetName)));
 }

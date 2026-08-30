@@ -13,15 +13,16 @@ using Microsoft.Extensions.Hosting;
 
 // Creates the demo Host. The Host cancellation token is propagated to every Worker.
 var builder = Host.CreateApplicationBuilder(args);
+//var useInMemoryTransport = args.Contains("--in-memory", StringComparer.OrdinalIgnoreCase);
 
 // Registers the complete MQTT infrastructure and typed context through one fluent entry point.
 // The library creates a singleton IMqttBus, so every Worker shares the same connection.
 builder.Services.AddMqttReactiveOrm<MqttContext>(mqtt =>
 {
-    // Configures the transport and the process's technical identity.
-    mqtt.ConnectTo("localhost", 1883)
-        // Uses a stable ClientId so the broker can identify this instance.
-        .IdentifyAs("business-workers-demo")
+    mqtt.ConnectTo("localhost", 62408);
+
+    // Configures the process's technical identity and governed topic hierarchy.
+    mqtt.IdentifyAs("business-workers-demo")
         // Prefixes all relative [MqttTopic] publication and subscription addresses.
         .WithBaseTopic("factory_64")
         // Places every topic under factory_64/moduls/factory/services/business-workers.
@@ -50,6 +51,10 @@ builder.Services.AddMqttReactiveOrm<MqttContext>(mqtt =>
 
         // BS2 output: the result published after the video stream has been assembled.
         entities.Add<Bs2VideoResult>();
+
+        // Request/reply Event Entities used to verify shared subscription and correlation.
+        entities.Add<SimpleMessage>();
+        entities.Add<SimpleMessageResponse>();
     });
 
     // Registers the JSON Schema associated with each dataschema above.
@@ -92,6 +97,22 @@ builder.Services.AddMqttReactiveOrm<MqttContext>(mqtt =>
                 AppContext.BaseDirectory,
                 "Schemas",
                 "bs2-video-result-v1.schema.json"));
+
+        schemas.AddInline("urn:schema:factory:demo-simple-message-request:v1",
+            """
+            { "type":"object", "required":["message"],
+              "properties":{ "message":{"type":"string","minLength":1} },
+              "additionalProperties":false }
+            """,
+            version: "1.0.0");
+
+        schemas.AddInline("urn:schema:factory:demo-simple-message-response:v1",
+            """
+            { "type":"object", "required":["response"],
+              "properties":{ "response":{"type":"string","minLength":1} },
+              "additionalProperties":false }
+            """,
+            version: "1.0.0");
     });
 });
 
@@ -108,6 +129,8 @@ builder.Services.AddHostedService<BusinessWorkerBs1>();
 builder.Services.AddHostedService<BusinessWorkerBs2>();
 // Simulates external sources after IMqttBus reaches the Ready state.
 builder.Services.AddHostedService<BusinessInputSimulatorWorker>();
+// Exercises request/reply with concurrent requests over one correlated response subscription.
+builder.Services.AddHostedService<RequestReplyDemoWorker>();
 
 // Builds the container, connects MQTT through the library Hosted Service,
 // and keeps the process running until Ctrl+C or a Host shutdown signal.

@@ -70,13 +70,24 @@ public sealed class TopicSet<T> : ITopicSet<T>
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<MqttMessageContext<T>> ReadAllAsync(
+    public IAsyncEnumerable<MqttMessageContext<T>> ReadAllAsync(
         SubscriptionOptions options,
+        CancellationToken cancellationToken) => ReadAllCoreAsync(options, null, cancellationToken);
+
+    internal IAsyncEnumerable<MqttMessageContext<T>> ReadAllAsync(
+        SubscriptionOptions options,
+        Action<MqttSubscription> subscriptionCreated,
+        CancellationToken cancellationToken) => ReadAllCoreAsync(options, subscriptionCreated, cancellationToken);
+
+    private async IAsyncEnumerable<MqttMessageContext<T>> ReadAllCoreAsync(
+        SubscriptionOptions options,
+        Action<MqttSubscription>? subscriptionCreated,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options);
         if (options.Capacity <= 0) throw new ArgumentOutOfRangeException(nameof(options), "Capacity must be greater than zero.");
         var subscription = new MqttSubscription(Definition.SubscribeFilter, options.QoS ?? Definition.QoS, options.Capacity);
+        subscriptionCreated?.Invoke(subscription);
         await foreach (var delivery in MqttBus.SubscribeAsync(subscription, cancellationToken).ConfigureAwait(false))
         {
             if (!Definition.MatchesSubscription<T>(delivery.Topic)) continue;

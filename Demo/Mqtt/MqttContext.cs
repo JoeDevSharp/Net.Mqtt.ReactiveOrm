@@ -2,6 +2,7 @@ using Demo.Entities;
 using Net.Mqtt.Infrastructure;
 using Net.Mqtt.Infrastructure.Enums;
 using Net.Mqtt.Infrastructure.Attributes;
+using Net.Mqtt.Infrastructure.RequestReply;
 
 namespace Demo.Mqtt;
 
@@ -32,4 +33,16 @@ public sealed class MqttContext(MqttContextDependencies dependencies) : MqttOrmC
     /// <summary>Gets completed video results produced by business Worker BS2.</summary>
     [MqttTopic(PublishTopic = "business/bs2/results/v1", SubscribeFilter = "business/bs2/results/v1", QoS = MqttQoS.AtLeastOnce)]
     public TopicSet<Bs2VideoResult> Bs2VideoResults => Set<Bs2VideoResult>();
+
+    /// <summary>Gets request messages for the request/reply demonstration.</summary>
+    [MqttTopic(PublishTopic = "request-reply/simple/request", SubscribeFilter = "request-reply/simple/request", QoS = MqttQoS.AtLeastOnce)]
+    public TopicSet<SimpleMessage> SimpleMessages => Set<SimpleMessage>();
+
+    /// <summary>Gets correlated responses for the request/reply demonstration.</summary>
+    [MqttTopic(PublishTopic = "request-reply/simple/response", SubscribeFilter = "request-reply/simple/response", QoS = MqttQoS.AtLeastOnce)]
+    public TopicSet<SimpleMessageResponse> SimpleMessageResponses => Set<SimpleMessageResponse>();
+
+    /// <summary>Gets the shared correlated request/reply dispatcher.</summary>
+    public MqttRequestSet<SimpleMessage, SimpleMessageResponse> SimpleMessageRequests =>
+        Request<SimpleMessage, SimpleMessageResponse>(nameof(SimpleMessages), nameof(SimpleMessageResponses));
 }

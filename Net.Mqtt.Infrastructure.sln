@@ -6,7 +6,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Demo", "Demo\Demo.csproj", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Net.Mqtt.Infrastructure", "Net.Mqtt.Infrastructure\Net.Mqtt.Infrastructure.csproj", "{8A004146-1D42-0602-A343-187B00946B0B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Mint.Webservice.Busisness1", "..\poc_mint_new_archi\Services\Mint.Webservice.Busisness1\Mint.Webservice.Busisness1.csproj", "{7F9579CA-D1D0-3A5F-F775-DD1A25B1C6AD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DemoApiExpose", "DemoApiExpose\DemoApiExpose.csproj", "{D74BA5BD-724B-4E81-B260-64431B0E77D4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -22,10 +22,10 @@ Global
 		{8A004146-1D42-0602-A343-187B00946B0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8A004146-1D42-0602-A343-187B00946B0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8A004146-1D42-0602-A343-187B00946B0B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7F9579CA-D1D0-3A5F-F775-DD1A25B1C6AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7F9579CA-D1D0-3A5F-F775-DD1A25B1C6AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7F9579CA-D1D0-3A5F-F775-DD1A25B1C6AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7F9579CA-D1D0-3A5F-F775-DD1A25B1C6AD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D74BA5BD-724B-4E81-B260-64431B0E77D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D74BA5BD-724B-4E81-B260-64431B0E77D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D74BA5BD-724B-4E81-B260-64431B0E77D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D74BA5BD-724B-4E81-B260-64431B0E77D4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

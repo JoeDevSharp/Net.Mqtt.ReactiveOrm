@@ -54,6 +54,7 @@ public sealed class InMemoryMqttBus : IMqttBus
             SingleReader = true
         }));
         _subscribers[id] = subscriber;
+        subscription.MarkReady();
         try
         {
             await foreach (var delivery in subscriber.Channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)) yield return delivery;

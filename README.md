@@ -478,6 +478,44 @@ await foreach (var message in context.SensorReadings.ReadAllAsync(
 
 The bounded channel slows down the reading when the consumer is late. If the handler fails, the acknowledgement is not executed and MQTT can re-deliver the message based on its QoS and session.
 
+### HTTP → MQTT request/reply
+
+The context can expose one shared request/reply dispatcher:
+
+```csharp
+using Net.Mqtt.Infrastructure.RequestReply;
+
+public MqttRequestSet<SimpleMessage, SempleMessageResponse> SimpleMessageRequest =>
+    Request<SimpleMessage, SempleMessageResponse>(
+        nameof(SempleMessage),
+        nameof(SempleMessageResponse));
+```
+
+The arguments are the names of the two `TopicSet<T>` properties. The HTTP endpoint becomes one operation:
+
+```csharp
+var response = await context.SimpleMessageRequest.SendAsync(
+    new SimpleMessage { Message = message },
+    new MqttRequestOptions { Timeout = TimeSpan.FromSeconds(10) },
+    cancellationToken);
+
+return Results.Ok(response.Data);
+```
+
+The library creates `correlationid`, installs one shared subscription, waits for `SUBACK`, publishes, dispatches the response to the correct caller, and acknowledges it. Concurrent HTTP requests do not create one MQTT subscription each.
+
+The responding Worker automatically propagates correlation, causation, and tracing:
+
+```csharp
+protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+    context.SimpleMessageRequest.HandleAsync(
+        (request, cancellationToken) => Task.FromResult(
+            new SempleMessageResponse { Response = "OK" }),
+        stoppingToken);
+```
+
+A timeout raises `MqttRequestTimeoutException`. The endpoint does not manage `MoveNextAsync` or `DisposeAsync`.
+
 ### Reactive compatibility
 
 ```csharp
@@ -946,7 +984,23 @@ mqtt.Advanced.Reconnect.MaximumAttempts = 20;
 
 Low-level registration extensions for special integrations also remain available.
 
- Demo
+## Demo
+
+The `DemoApiExpose` project demonstrates the HTTP → MQTT request/reply bridge with both an ASP.NET Core controller and Minimal API. It uses the in-memory transport by default:
+
+```bash
+dotnet run --project DemoApiExpose/DemoApiExpose.csproj --urls http://localhost:5080
+```
+
+Endpoints: `POST /api/controller/messages` and `POST /api/minimal/messages`, both accepting `{ "message": "hello" }`.
+
+To verify the complete flow without a broker, including request/reply with three concurrent automatically correlated requests:
+
+```bash
+dotnet run --project Demo/Demo.csproj -- --in-memory
+```
+
+The output confirms `ACK:alpha`, `ACK:beta`, and `ACK:gamma`, each with its own `correlationid`.
 
 Start Mosquitto:
 

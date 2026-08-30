@@ -50,7 +50,7 @@ public sealed class BusinessServiceBs2 : IBusinessServiceBs2
         var chunks = _streams.GetOrAdd(chunk.StreamId, _ => new());
         lock (chunks)
         {
-            chunks.TryAdd(chunk.Sequence, chunk.Payload);
+            chunks.TryAdd(chunk.Sequence, chunk.Payload); 
             if (!chunk.IsFinal) return ValueTask.FromResult<Bs2VideoResult?>(null);
 
             var totalBytes = chunks.Values.Sum(value => value.Length);

@@ -16,7 +16,7 @@
     <PackageIcon>JoeDevSharp.MqttNet.ReactiveBinding.logo.png</PackageIcon>
     <RootNamespace>$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
     <PackageTags>mqtt, mqttnet, mqtt5, mqtt-3.1.1, dotnet, worker-service, messaging, infrastructure, cloud-events, cloudevents, mtls, tls, reactive, async-enumerable, typed-messaging, typed-topics, pubsub, event-driven, schema-validation, json-schema, contract-validation, persistent-sessions, reconnection, backpressure, acknowledgement, observability, iot</PackageTags>
-    <Version>2.1.2</Version>
+    <Version>2.2.0</Version>
     <Copyright></Copyright>
     <PackageOutputPath>bin/nuget</PackageOutputPath>
     <Product>$(AssemblyName)</Product>

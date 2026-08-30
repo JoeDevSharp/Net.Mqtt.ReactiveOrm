@@ -133,6 +133,7 @@ public sealed class MqttNetBus : IMqttBus
         {
             SetState(ConnectionState.Subscribing);
             await _client.SubscribeAsync(subscription.TopicFilter, (MQTTnet.Protocol.MqttQualityOfServiceLevel)subscription.QoS, cancellationToken).ConfigureAwait(false);
+            subscription.MarkReady();
             SetState(ConnectionState.Ready);
             await foreach (var delivery in subscriber.Channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)) yield return delivery;
         }
