@@ -50,21 +50,41 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
     public string ResolveTopic(string topic)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
-        var root = GetServiceRoot();
-        if (topic.Equals(root, StringComparison.Ordinal) || topic.StartsWith(root + "/", StringComparison.Ordinal))
-            return topic;
-        return $"{root}/{topic.Trim('/')}";
+        ValidateOptions();
+        var baseLevels = GetBaseRoot().Split('/');
+        var rootLevels = GetServiceRoot().Split('/');
+        var suppliedLevels = topic.Trim('/').Split('/');
+        var isResolved = suppliedLevels.Length >= baseLevels.Length
+            && suppliedLevels[..baseLevels.Length].SequenceEqual(baseLevels, StringComparer.Ordinal);
+        var levels = isResolved ? new List<string>() : new List<string>(rootLevels);
+
+        foreach (var level in suppliedLevels)
+        {
+            if (level == ".") continue;
+            if (level == "..")
+            {
+                if (levels.Count <= baseLevels.Length)
+                    throw new InvalidOperationException(
+                        $"Relative topic '{topic}' escapes configured base topic '{GetBaseRoot()}'.");
+                levels.RemoveAt(levels.Count - 1);
+                continue;
+            }
+            levels.Add(level);
+        }
+        return string.Join('/', levels);
     }
 
     /// <inheritdoc />
     public string ToRelativeTopic(string topic)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
-        var prefix = GetServiceRoot();
-        if (topic.Equals(prefix, StringComparison.Ordinal)) return string.Empty;
-        return topic.StartsWith(prefix + "/", StringComparison.Ordinal)
-            ? topic[(prefix.Length + 1)..]
-            : topic;
+        var rootLevels = GetServiceRoot().Split('/');
+        var topicLevels = topic.Trim('/').Split('/');
+        var common = 0;
+        while (common < rootLevels.Length && common < topicLevels.Length
+            && string.Equals(rootLevels[common], topicLevels[common], StringComparison.Ordinal)) common++;
+        if (common < GetBaseRoot().Split('/').Length) return topic;
+        return string.Join('/', Enumerable.Repeat("..", rootLevels.Length - common).Concat(topicLevels.Skip(common)));
     }
 
     /// <summary>Validates the validate definition operation.</summary>
@@ -100,9 +120,9 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
 
     private void ValidateNamespaceAndSensitiveData(string topic)
     {
-        var expected = GetServiceRoot();
+        var expected = GetBaseRoot();
         if (!topic.Equals(expected, StringComparison.Ordinal) && !topic.StartsWith(expected + "/", StringComparison.Ordinal))
-            throw new InvalidOperationException($"Topic '{topic}' is outside module namespace '{expected}'.");
+            throw new InvalidOperationException($"Topic '{topic}' is outside configured base topic '{expected}'.");
         foreach (var segment in topic.Split('/'))
         {
             if (options.ForbiddenSegmentNames.Contains(segment) || options.ForbiddenValues.Contains(segment))
@@ -141,6 +161,8 @@ public sealed class MqttTopicPolicy(MqttTopicPolicyOptions options) : IMqttTopic
         ValidateOptions();
         return $"{options.BaseTopic!.Trim('/')}/moduls/{options.ModuleIdentity}/services/{options.ServiceIdentity}";
     }
+
+    private string GetBaseRoot() => options.BaseTopic!.Trim('/');
 
     private static void ValidateIdentity(string identity, string parameterName)
     {

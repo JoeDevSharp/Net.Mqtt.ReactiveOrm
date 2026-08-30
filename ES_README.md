@@ -451,6 +451,17 @@ public TopicSet<BusinessEvent> Events => Set<BusinessEvent>();
 
 Los topics efectivos serán `mint/v1.2.55/moduls/mint_module_business1/services/mint_webservice_business1/events/created` y `mint/v1.2.55/moduls/mint_module_business1/services/mint_webservice_business1/events/+`. La biblioteca construye la jerarquía fija `base/moduls/{module}/services/{service}`, normaliza las barras y valida que las identidades sean segmentos MQTT simples.
 
+Los segmentos `../` permiten publicar o suscribirse en una jerarquía superior. La navegación parte de la raíz del servicio y se aplica de igual forma a `PublishTopic`, `SubscribeFilter` y topics dinámicos:
+
+```csharp
+[MqttTopic(
+    PublishTopic = "../../capabilities/simple_message/request",
+    SubscribeFilter = "../../capabilities/simple_message/request")]
+public TopicSet<SimpleMessage> SimpleMessages => Set<SimpleMessage>();
+```
+
+Con la configuración anterior se resuelve como `mint/v1.2.55/moduls/mint_module_business1/capabilities/simple_message/request`: el primer `..` elimina la identidad del servicio y el segundo elimina el segmento `services`. La librería rechaza cualquier ruta que intente escapar por encima de `WithBaseTopic`.
+
 Los segmentos de versión de la raíz pueden usar el formato `v` seguido de componentes separados por puntos, por ejemplo `v1.2.55` o `v0.0.0.a`. Estos valores no se confunden con hostnames; los segmentos que realmente tienen forma de hostname continúan prohibidos.
 
 Un topic estático se declara una sola vez en `[MqttTopic]`; el registro de Event Entities aporta `type` y `dataschema`:

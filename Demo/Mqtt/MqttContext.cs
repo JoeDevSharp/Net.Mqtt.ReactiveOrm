@@ -12,8 +12,8 @@ public sealed class MqttContext(MqttContextDependencies dependencies) : MqttOrmC
 {
     /// <summary>Gets environmental inputs consumed by business Worker BS1.</summary>
     [MqttTopic(
-        PublishTopic = "business/bs1/inputs/environment/v1",
-        SubscribeFilter = "business/bs1/inputs/environment/v1",
+        PublishTopic = "../business/bs1/inputs/environment/v1",
+        SubscribeFilter = "../qbusiness/bs1/inputs/environment/v1",
         QoS = MqttQoS.ExactlyOnce,
         Retain = false)]
     public TopicSet<Sensor1Telemetry> Sensor1Telemetry => Set<Sensor1Telemetry>();

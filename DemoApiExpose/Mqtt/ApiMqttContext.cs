@@ -8,10 +8,10 @@ namespace DemoApiExpose.Mqtt;
 
 public sealed class ApiMqttContext(MqttContextDependencies dependencies) : MqttOrmContext(dependencies)
 {
-    [MqttTopic(PublishTopic = "controller/messages/request", SubscribeFilter = "controller/messages/request", QoS = MqttQoS.AtLeastOnce)]
+    [MqttTopic(PublishTopic = "../../capabilities/controller/messages/request", SubscribeFilter = "../../capabilities/controller/messages/request", QoS = MqttQoS.AtLeastOnce)]
     public TopicSet<ControllerMessageRequest> ControllerRequests => Set<ControllerMessageRequest>();
 
-    [MqttTopic(PublishTopic = "controller/messages/response", SubscribeFilter = "controller/messages/response", QoS = MqttQoS.AtLeastOnce)]
+    [MqttTopic(PublishTopic = "../../capabilities/controller/messages/response", SubscribeFilter = "../../capabilities/controller/messages/response", QoS = MqttQoS.AtLeastOnce)]
     public TopicSet<ControllerMessageResponse> ControllerResponses => Set<ControllerMessageResponse>();
 
     [MqttTopic(PublishTopic = "minimal/messages/request", SubscribeFilter = "minimal/messages/request", QoS = MqttQoS.AtLeastOnce)]

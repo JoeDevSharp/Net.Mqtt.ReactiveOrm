@@ -451,6 +451,17 @@ public TopicSet<BusinessEvent> Events => Set<BusinessEvent>();
 
 The effective addresses are `mint/v1.2.55/moduls/mint_module_business1/services/mint_webservice_business1/events/created` and `mint/v1.2.55/moduls/mint_module_business1/services/mint_webservice_business1/events/+`. The library builds the fixed `base/moduls/{module}/services/{service}` hierarchy, normalizes slashes, and validates that both identities are single MQTT levels.
 
+`../` levels allow publication or subscription higher in the hierarchy. Navigation starts at the service root and applies equally to `PublishTopic`, `SubscribeFilter`, and dynamic topics:
+
+```csharp
+[MqttTopic(
+    PublishTopic = "../../capabilities/simple_message/request",
+    SubscribeFilter = "../../capabilities/simple_message/request")]
+public TopicSet<SimpleMessage> SimpleMessages => Set<SimpleMessage>();
+```
+
+With the configuration above, this resolves to `mint/v1.2.55/moduls/mint_module_business1/capabilities/simple_message/request`: the first `..` removes the service identity and the second removes the `services` level. Any path attempting to escape above `WithBaseTopic` is rejected.
+
 Version levels in the root may use `v` followed by dot-separated components, such as `v1.2.55` or `v0.0.0.a`. These values are not mistaken for hostnames; actual hostname-shaped levels remain forbidden.
 
 A static topic is declared only once in `[MqttTopic]`; the contractual record provides `type` and `dataschema`:
